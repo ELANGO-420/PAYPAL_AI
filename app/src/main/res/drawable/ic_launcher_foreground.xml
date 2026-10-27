@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- White Card Base -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:strokeColor="#0070BA"
+        android:strokeWidth="1.5"
+        android:pathData="M 28,26 H 80 A 10,10 0 0 1 90,36 V 72 A 10,10 0 0 1 80,82 H 28 A 10,10 0 0 1 18,72 V 36 A 10,10 0 0 1 28,26 Z" />
+
+    <!-- Left Deep Navy 'P' -->
+    <path
+        android:fillColor="#001845"
+        android:pathData="M 36,36 H 50 C 57,36 62,40 62,47 C 62,54 56,58 48,58 H 43 V 74 H 36 V 36 Z M 43,43 V 51 H 48 C 52,51 55,49 55,47 C 55,44 52,43 48,43 H 43 Z" />
+
+    <!-- Right Vibrant Cyan-Blue 'P' -->
+    <path
+        android:fillColor="#0070BA"
+        android:pathData="M 45,40 H 59 C 66,40 71,44 71,51 C 71,58 65,62 57,62 H 52 V 78 H 45 V 40 Z M 52,47 V 55 H 57 C 61,55 64,53 64,51 C 64,48 61,47 57,47 H 52 Z" />
+</vector>

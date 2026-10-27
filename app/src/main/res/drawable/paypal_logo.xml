@@ -1,0 +1,45 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="180dp"
+    android:height="90dp"
+    android:viewportWidth="240"
+    android:viewportHeight="120">
+
+    <!-- White Card Background with Rounded Corners -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:strokeColor="#0070BA"
+        android:strokeWidth="2.5"
+        android:pathData="M 20,10 H 220 A 15,15 0 0 1 235,25 V 95 A 15,15 0 0 1 220,110 H 20 A 15,15 0 0 1 5,95 V 25 A 15,15 0 0 1 20,10 Z" />
+
+    <!-- Left Deep Navy 'P' -->
+    <path
+        android:fillColor="#001845"
+        android:pathData="M 38,32 H 58 C 68,32 75,37 75,46 C 75,56 67,62 56,62 H 48 V 85 H 38 V 32 Z M 48,41 V 53 H 56 C 61,53 65,51 65,47 C 65,43 61,41 56,41 H 48 Z" />
+
+    <!-- Right Vibrant Cyan-Blue 'P' -->
+    <path
+        android:fillColor="#0070BA"
+        android:pathData="M 50,38 H 70 C 80,38 87,43 87,52 C 87,62 79,68 68,68 H 60 V 91 H 50 V 38 Z M 60,47 V 59 H 68 C 73,59 77,57 77,53 C 77,49 73,47 68,47 H 60 Z" />
+
+    <!-- Wordmark 'Pay' (Deep Navy) -->
+    <path
+        android:fillColor="#001845"
+        android:pathData="M 98,36 H 112 C 120,36 125,40 125,47 C 125,55 119,59 110,59 H 105 V 76 H 98 V 36 Z M 105,43 V 52 H 111 C 115,52 118,50 118,47 C 118,44 115,43 111,43 H 105 Z" />
+    <path
+        android:fillColor="#001845"
+        android:pathData="M 132,50 C 127,50 124,53 124,57 C 124,62 128,65 135,65 C 139,65 142,64 144,62 V 57 H 136 V 52 H 150 V 71 C 147,74 141,76 134,76 C 122,76 116,69 116,59 C 116,49 124,43 135,43 C 142,43 148,46 151,50 L 145,55 C 142,52 139,50 135,50 Z" />
+    <path
+        android:fillColor="#001845"
+        android:pathData="M 153,44 H 160 L 167,64 L 174,44 H 181 L 171,71 C 167,81 161,85 152,85 H 148 V 79 H 151 C 156,79 159,76 161,71 L 153,44 Z" />
+
+    <!-- Wordmark 'Pal' (Vibrant Cyan-Blue) -->
+    <path
+        android:fillColor="#0070BA"
+        android:pathData="M 182,36 H 196 C 204,36 209,40 209,47 C 209,55 203,59 194,59 H 189 V 76 H 182 V 36 Z M 189,43 V 52 H 195 C 199,52 202,50 202,47 C 202,44 199,43 195,43 H 189 Z" />
+    <path
+        android:fillColor="#0070BA"
+        android:pathData="M 216,50 C 211,50 208,53 208,57 C 208,62 212,65 219,65 C 223,65 226,64 228,62 V 57 H 220 V 52 H 234 V 76 H 228 V 72 C 225,75 221,76 216,76 C 206,76 201,70 201,61 C 201,51 207,43 218,43 C 224,43 229,45 232,48 L 227,53 C 225,51 222,50 216,50 Z" />
+    <path
+        android:fillColor="#0070BA"
+        android:pathData="M 236,32 H 243 V 76 H 236 V 32 Z" />
+</vector>
