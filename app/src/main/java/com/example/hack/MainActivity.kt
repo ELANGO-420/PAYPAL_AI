@@ -81,57 +81,110 @@ object LiveAiChatEngine {
         protectedFromScams: Double
     ): String = withContext(Dispatchers.IO) {
         val promptText = """
-            You are PayPal AI Financial Analyst, an expert financial assistant built into the PayPal Android App.
-            User's live metrics:
+            You are PayPal AI Financial Analyst, an expert financial assistant built directly into the PayPal Android app.
+            
+            Current Live Wallet State for this user:
             - Wallet Balance: ${formatMoney(balance)}
-            - Monthly Credit: +${formatMoney(monthlyCredit)}
-            - Monthly Debit: -${formatMoney(monthlyDebit)}
+            - Total Monthly Credit: +${formatMoney(monthlyCredit)}
+            - Total Monthly Debit: -${formatMoney(monthlyDebit)}
+            - Net Cashflow: ${formatMoney(monthlyCredit - monthlyDebit)}
             - Money Saved by AI Escrow Pauses: ${formatMoney(savedByAi)}
             - Scams Blocked by AI Scam Shield: ${formatMoney(protectedFromScams)}
 
-            User's Question: "$userQuery"
+            User Query: "$userQuery"
 
-            Provide a 1 to 2 sentence smart financial insight directly answering their query using their real live balance and numbers.
+            Instructions:
+            Provide a direct, friendly, and concise 2-sentence financial answer addressing the user's query specifically using their exact live wallet numbers.
         """.trimIndent()
 
-        val localResponse = getSmartLocalResponse(userQuery, monthlyCredit, monthlyDebit, balance, savedByAi, protectedFromScams)
+        val modelEndpoints = listOf(
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$apiKey",
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=$apiKey",
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=$apiKey"
+        )
 
-        try {
-            val endpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$apiKey"
-            val url = URL(endpoint)
-            val conn = (url.openConnection() as HttpURLConnection).apply {
-                requestMethod = "POST"
-                doOutput = true
-                connectTimeout = 3500
-                readTimeout = 3500
-                setRequestProperty("Content-Type", "application/json")
-            }
+        for (endpointUrl in modelEndpoints) {
+            try {
+                val url = URL(endpointUrl)
+                val conn = (url.openConnection() as HttpURLConnection).apply {
+                    requestMethod = "POST"
+                    doOutput = true
+                    connectTimeout = 5000
+                    readTimeout = 5000
+                    setRequestProperty("Content-Type", "application/json; charset=UTF-8")
+                    setRequestProperty("Accept", "application/json")
+                }
 
-            val escapedPrompt = promptText.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n")
-            val jsonBody = "{\"contents\":[{\"parts\":[{\"text\":\"$escapedPrompt\"}]}]}"
+                val jsonPayload = buildJsonRequestBody(promptText)
 
-            conn.outputStream.use { os ->
-                os.write(jsonBody.toByteArray(Charsets.UTF_8))
-            }
+                conn.outputStream.use { os ->
+                    os.write(jsonPayload.toByteArray(Charsets.UTF_8))
+                }
 
-            if (conn.responseCode == 200) {
-                val respText = conn.inputStream.bufferedReader().use { it.readText() }
-                val textPattern = Regex("\"text\"\\s*:\\s*\"([^\"]+)\"")
-                val match = textPattern.find(respText)
-                if (match != null && match.groupValues.size > 1) {
-                    val extractedText = match.groupValues[1]
-                        .replace("\\n", " ")
-                        .replace("\\\"", "\"")
-                        .replace("\\\\", "\\")
-                    if (extractedText.isNotBlank() && extractedText.length > 5) {
-                        return@withContext extractedText
+                val responseCode = conn.responseCode
+                if (responseCode == 200) {
+                    val respText = conn.inputStream.bufferedReader().use { it.readText() }
+                    val extractedAiText = parseGeminiResponseText(respText)
+                    if (!extractedAiText.isNullOrBlank()) {
+                        return@withContext extractedAiText
                     }
                 }
+            } catch (e: Exception) {
+                e.printStackTrace()
             }
-        } catch (_: Exception) {
         }
 
-        localResponse
+        getSmartLocalResponse(userQuery, monthlyCredit, monthlyDebit, balance, savedByAi, protectedFromScams)
+    }
+
+    private fun buildJsonRequestBody(promptText: String): String {
+        val escaped = promptText
+            .replace("\\", "\\\\")
+            .replace("\"", "\\\"")
+            .replace("\r", "")
+            .replace("\n", "\\n")
+            .replace("\t", "\\t")
+        return """{"contents":[{"parts":[{"text":"$escaped"}]}]}"""
+    }
+
+    private fun parseGeminiResponseText(jsonResponse: String): String? {
+        try {
+            val parts = jsonResponse.split("\"text\":")
+            if (parts.size > 1) {
+                val textSegment = parts[1].trim()
+                if (textSegment.startsWith("\"")) {
+                    var i = 1
+                    val sb = StringBuilder()
+                    var escaped = false
+                    while (i < textSegment.length) {
+                        val c = textSegment[i]
+                        if (escaped) {
+                            when (c) {
+                                'n' -> sb.append('\n')
+                                'r' -> sb.append('\r')
+                                't' -> sb.append('\t')
+                                '"' -> sb.append('"')
+                                '\\' -> sb.append('\\')
+                                else -> sb.append(c)
+                            }
+                            escaped = false
+                        } else if (c == '\\') {
+                            escaped = true
+                        } else if (c == '"') {
+                            break
+                        } else {
+                            sb.append(c)
+                        }
+                        i++
+                    }
+                    val result = sb.toString().trim()
+                    if (result.isNotBlank()) return result
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        return null
     }
 
     private fun getSmartLocalResponse(
@@ -146,16 +199,16 @@ object LiveAiChatEngine {
         val netCashflow = monthlyCredit - monthlyDebit
         return when {
             q.contains("credit") || q.contains("debit") || q.contains("cashflow") || q.contains("analyze") -> {
-                "Financial Breakdown: Total Monthly Credit is +${formatMoney(monthlyCredit)} and Debit is -${formatMoney(monthlyDebit)}. Your Net Cashflow is ${formatMoney(netCashflow)} with a live wallet balance of ${formatMoney(balance)}."
+                "Financial Statement Analysis: Total Monthly Credit is +${formatMoney(monthlyCredit)} and Debit is -${formatMoney(monthlyDebit)}. Your Net Cashflow is ${formatMoney(netCashflow)} with a live wallet balance of ${formatMoney(balance)}."
             }
             q.contains("spend") || q.contains("most") || q.contains("largest") || q.contains("where") -> {
-                "Spending Analysis: Your largest expense category was Food & Dining ($120.00 Grocery + $85.00 Bistro), with total debits currently at -${formatMoney(monthlyDebit)}."
+                "Spending Category Insight: Your largest debits were Food & Dining ($120.00 Grocery + $85.00 Bistro) and Utility Bills ($145.00), totaling -${formatMoney(monthlyDebit)}."
             }
             q.contains("save") || q.contains("ai") || q.contains("scam") || q.contains("protected") || q.contains("how much") -> {
-                "AI Protection Impact: PayPal AI has saved you ${formatMoney(savedByAi)} by auto-pausing idle subscriptions and protected ${formatMoney(protectedFromScams)} from fraudulent scam attempts!"
+                "AI Protection Impact: PayPal AI saved you ${formatMoney(savedByAi)} by auto-pausing idle subscriptions and intercepted ${formatMoney(protectedFromScams)} from scam attempts!"
             }
             else -> {
-                "PayPal AI Statement Summary: Wallet balance is ${formatMoney(balance)}, Net Cashflow is +${formatMoney(netCashflow)}, and total AI automated savings stand at ${formatMoney(savedByAi + protectedFromScams)}."
+                "PayPal AI Statement Overview: Current wallet balance is ${formatMoney(balance)}, Net Cashflow is +${formatMoney(netCashflow)}, and total AI automated savings stand at ${formatMoney(savedByAi + protectedFromScams)}."
             }
         }
     }
