@@ -81,81 +81,61 @@ object LiveAiChatEngine {
         protectedFromScams: Double
     ): String = withContext(Dispatchers.IO) {
         val promptText = """
-            You are PayPal AI Financial Analyst, an expert, friendly AI assistant built into the PayPal Android App.
-            Here is the user's current live financial context:
+            You are PayPal AI Financial Analyst, an expert financial assistant in the PayPal Android App.
+            Current user wallet metrics:
             - Wallet Balance: ${formatMoney(balance)}
             - Monthly Credit: +${formatMoney(monthlyCredit)}
             - Monthly Debit: -${formatMoney(monthlyDebit)}
-            - Money Saved by AI Escrow Pauses: ${formatMoney(savedByAi)}
+            - Money Saved by AI Escrow: ${formatMoney(savedByAi)}
             - Scams Blocked by AI Scam Shield: ${formatMoney(protectedFromScams)}
 
             User's Question: "$userQuery"
 
-            Provide a concise, highly insightful, professional, and helpful financial response (2-3 sentences max) tailored specifically to their live numbers.
+            Provide a concise, helpful response (1 to 2 sentences) analyzing their exact live numbers.
         """.trimIndent()
 
+        val localResponse = getSmartLocalResponse(userQuery, monthlyCredit, monthlyDebit, balance, savedByAi, protectedFromScams)
+
         try {
-            val endpoints = listOf(
-                "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=$apiKey",
-                "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$apiKey"
-            )
-
-            for (endpointUrl in endpoints) {
-                try {
-                    val url = URL(endpointUrl)
-                    val conn = (url.openConnection() as HttpURLConnection).apply {
-                        requestMethod = "POST"
-                        doOutput = true
-                        connectTimeout = 4000
-                        readTimeout = 4000
-                        setRequestProperty("Content-Type", "application/json")
-                    }
-
-                    val escapedPrompt = promptText.replace("\n", " ").replace("\"", "\\\"")
-                    val jsonBody = """
-                        {
-                          "contents": [
-                            {
-                              "parts": [
-                                {
-                                  "text": "$escapedPrompt"
-                                }
-                              ]
-                            }
-                          ]
-                        }
-                    """.trimIndent()
-
-                    conn.outputStream.use { os ->
-                        os.write(jsonBody.toByteArray())
-                    }
-
-                    if (conn.responseCode == 200) {
-                        val respText = conn.inputStream.bufferedReader().use { it.readText() }
-                        val textIdx = respText.indexOf("\"text\": \"")
-                        if (textIdx != -1) {
-                            val candidate = respText.substring(textIdx + 9)
-                            val endIdx = candidate.indexOf("\"")
-                            if (endIdx != -1) {
-                                val reply = candidate.substring(0, endIdx)
-                                    .replace("\\n", " ")
-                                    .replace("\\\"", "\"")
-                                if (reply.isNotBlank()) return@withContext reply
-                            }
-                        }
-                    }
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
+            val endpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$apiKey"
+            val url = URL(endpoint)
+            val conn = (url.openConnection() as HttpURLConnection).apply {
+                requestMethod = "POST"
+                doOutput = true
+                connectTimeout = 3000
+                readTimeout = 3000
+                setRequestProperty("Content-Type", "application/json")
             }
 
-            getSmartLocalFallback(userQuery, monthlyCredit, monthlyDebit, balance, savedByAi, protectedFromScams)
+            val escapedPrompt = promptText.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n")
+            val jsonBody = "{\"contents\":[{\"parts\":[{\"text\":\"$escapedPrompt\"}]}]}"
+
+            conn.outputStream.use { os ->
+                os.write(jsonBody.toByteArray(Charsets.UTF_8))
+            }
+
+            if (conn.responseCode == 200) {
+                val respText = conn.inputStream.bufferedReader().use { it.readText() }
+                val textPattern = Regex("\"text\"\\s*:\\s*\"([^\"]+)\"")
+                val match = textPattern.find(respText)
+                if (match != null && match.groupValues.size > 1) {
+                    val extractedText = match.groupValues[1]
+                        .replace("\\n", " ")
+                        .replace("\\\"", "\"")
+                        .replace("\\\\", "\\")
+                    if (extractedText.isNotBlank() && extractedText.length > 5) {
+                        return@withContext extractedText
+                    }
+                }
+            }
         } catch (e: Exception) {
-            getSmartLocalFallback(userQuery, monthlyCredit, monthlyDebit, balance, savedByAi, protectedFromScams)
+            e.printStackTrace()
         }
+
+        localResponse
     }
 
-    private fun getSmartLocalFallback(
+    private fun getSmartLocalResponse(
         userQuery: String,
         monthlyCredit: Double,
         monthlyDebit: Double,
@@ -166,17 +146,17 @@ object LiveAiChatEngine {
         val q = userQuery.lowercase()
         val netCashflow = monthlyCredit - monthlyDebit
         return when {
-            q.contains("credit") || q.contains("debit") || q.contains("cashflow") -> {
-                "Your Total Monthly Credit is ${formatMoney(monthlyCredit)} and Total Debit is ${formatMoney(monthlyDebit)}. Net Cashflow: ${formatMoney(netCashflow)} with wallet balance at ${formatMoney(balance)}."
+            q.contains("credit") || q.contains("debit") || q.contains("cashflow") || q.contains("analyze") -> {
+                "Your Total Monthly Credit is ${formatMoney(monthlyCredit)} and Debit is ${formatMoney(monthlyDebit)}. Your Net Cashflow is ${formatMoney(netCashflow)} with a live wallet balance of ${formatMoney(balance)}."
             }
-            q.contains("spend") || q.contains("most") || q.contains("largest") -> {
-                "Your largest expenses this month were in Food & Dining ($120.00) and Utility Bills ($145.00). Overall debit stands at ${formatMoney(monthlyDebit)}."
+            q.contains("spend") || q.contains("most") || q.contains("largest") || q.contains("where") -> {
+                "Your highest spending category this month was Food & Dining ($120.00 Grocery + $85.00 Restaurant), with total debits sitting at ${formatMoney(monthlyDebit)}."
             }
-            q.contains("save") || q.contains("ai") || q.contains("scam") || q.contains("protected") -> {
-                "AI has saved you ${formatMoney(savedByAi)} by automatically pausing idle subscriptions, and intercepted ${formatMoney(protectedFromScams)} from fraudulent scammers!"
+            q.contains("save") || q.contains("ai") || q.contains("scam") || q.contains("protected") || q.contains("how much") -> {
+                "PayPal AI has saved you ${formatMoney(savedByAi)} by auto-pausing idle subscriptions and protected ${formatMoney(protectedFromScams)} from scam attempts!"
             }
             else -> {
-                "AI Statement Summary: Balance is ${formatMoney(balance)}. Net Cashflow is ${formatMoney(netCashflow)}. AI Escrow & Scam Protection are active."
+                "PayPal AI Statement Analysis: Wallet balance is ${formatMoney(balance)}, Net Cashflow is ${formatMoney(netCashflow)}, and total AI savings stand at ${formatMoney(savedByAi + protectedFromScams)}."
             }
         }
     }
@@ -193,7 +173,6 @@ object PayPalSandboxEngine {
     suspend fun executePayPalSandboxPayment(amount: Double, description: String): String = withContext(Dispatchers.IO) {
         val fallbackId = "PAYID-SANDBOX-SUCCESS-${UUID.randomUUID().toString().take(8).uppercase()}"
         try {
-            // 1. Obtain OAuth2 Access Token from PayPal Sandbox REST API
             val authUrl = URL("$PAYPAL_BASE_URL/v1/oauth2/token")
             val authConn = (authUrl.openConnection() as HttpURLConnection).apply {
                 requestMethod = "POST"
@@ -217,7 +196,6 @@ object PayPalSandboxEngine {
                     val tokenSub = responseStr.substring(tokenStart + 16)
                     val accessToken = tokenSub.substring(0, tokenSub.indexOf("\""))
 
-                    // 2. Create PayPal Sandbox Order
                     val orderUrl = URL("$PAYPAL_BASE_URL/v2/checkout/orders")
                     val orderConn = (orderUrl.openConnection() as HttpURLConnection).apply {
                         requestMethod = "POST"
