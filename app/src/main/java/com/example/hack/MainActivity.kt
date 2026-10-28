@@ -81,17 +81,17 @@ object LiveAiChatEngine {
         protectedFromScams: Double
     ): String = withContext(Dispatchers.IO) {
         val promptText = """
-            You are PayPal AI Financial Analyst, an expert financial assistant in the PayPal Android App.
-            Current user wallet metrics:
+            You are PayPal AI Financial Analyst, an expert financial assistant built into the PayPal Android App.
+            User's live metrics:
             - Wallet Balance: ${formatMoney(balance)}
             - Monthly Credit: +${formatMoney(monthlyCredit)}
             - Monthly Debit: -${formatMoney(monthlyDebit)}
-            - Money Saved by AI Escrow: ${formatMoney(savedByAi)}
+            - Money Saved by AI Escrow Pauses: ${formatMoney(savedByAi)}
             - Scams Blocked by AI Scam Shield: ${formatMoney(protectedFromScams)}
 
             User's Question: "$userQuery"
 
-            Provide a concise, helpful response (1 to 2 sentences) analyzing their exact live numbers.
+            Provide a 1 to 2 sentence smart financial insight directly answering their query using their real live balance and numbers.
         """.trimIndent()
 
         val localResponse = getSmartLocalResponse(userQuery, monthlyCredit, monthlyDebit, balance, savedByAi, protectedFromScams)
@@ -102,8 +102,8 @@ object LiveAiChatEngine {
             val conn = (url.openConnection() as HttpURLConnection).apply {
                 requestMethod = "POST"
                 doOutput = true
-                connectTimeout = 3000
-                readTimeout = 3000
+                connectTimeout = 3500
+                readTimeout = 3500
                 setRequestProperty("Content-Type", "application/json")
             }
 
@@ -128,8 +128,7 @@ object LiveAiChatEngine {
                     }
                 }
             }
-        } catch (e: Exception) {
-            e.printStackTrace()
+        } catch (_: Exception) {
         }
 
         localResponse
@@ -147,16 +146,16 @@ object LiveAiChatEngine {
         val netCashflow = monthlyCredit - monthlyDebit
         return when {
             q.contains("credit") || q.contains("debit") || q.contains("cashflow") || q.contains("analyze") -> {
-                "Your Total Monthly Credit is ${formatMoney(monthlyCredit)} and Debit is ${formatMoney(monthlyDebit)}. Your Net Cashflow is ${formatMoney(netCashflow)} with a live wallet balance of ${formatMoney(balance)}."
+                "Financial Breakdown: Total Monthly Credit is +${formatMoney(monthlyCredit)} and Debit is -${formatMoney(monthlyDebit)}. Your Net Cashflow is ${formatMoney(netCashflow)} with a live wallet balance of ${formatMoney(balance)}."
             }
             q.contains("spend") || q.contains("most") || q.contains("largest") || q.contains("where") -> {
-                "Your highest spending category this month was Food & Dining ($120.00 Grocery + $85.00 Restaurant), with total debits sitting at ${formatMoney(monthlyDebit)}."
+                "Spending Analysis: Your largest expense category was Food & Dining ($120.00 Grocery + $85.00 Bistro), with total debits currently at -${formatMoney(monthlyDebit)}."
             }
             q.contains("save") || q.contains("ai") || q.contains("scam") || q.contains("protected") || q.contains("how much") -> {
-                "PayPal AI has saved you ${formatMoney(savedByAi)} by auto-pausing idle subscriptions and protected ${formatMoney(protectedFromScams)} from scam attempts!"
+                "AI Protection Impact: PayPal AI has saved you ${formatMoney(savedByAi)} by auto-pausing idle subscriptions and protected ${formatMoney(protectedFromScams)} from fraudulent scam attempts!"
             }
             else -> {
-                "PayPal AI Statement Analysis: Wallet balance is ${formatMoney(balance)}, Net Cashflow is ${formatMoney(netCashflow)}, and total AI savings stand at ${formatMoney(savedByAi + protectedFromScams)}."
+                "PayPal AI Statement Summary: Wallet balance is ${formatMoney(balance)}, Net Cashflow is +${formatMoney(netCashflow)}, and total AI automated savings stand at ${formatMoney(savedByAi + protectedFromScams)}."
             }
         }
     }
@@ -236,8 +235,7 @@ object PayPalSandboxEngine {
                 }
             }
             fallbackId
-        } catch (e: Exception) {
-            e.printStackTrace()
+        } catch (_: Exception) {
             fallbackId
         }
     }
@@ -335,9 +333,7 @@ data class EscrowSub(
 data class FriendContact(
     val id: String,
     val name: String,
-    val handle: String,
-    var isSelected: Boolean = false,
-    var statusText: String = "Not requested",
+    val handle: String
 )
 
 data class ChatMsg(
@@ -441,7 +437,7 @@ fun PayPalFintechApp() {
 
     // Pre-loaded Friends for Split Bill
     val friends = remember {
-        mutableStateListOf(
+        listOf(
             FriendContact("f1", "Bala", "@bala_dev"),
             FriendContact("f2", "Karthick", "@karthick_ui"),
             FriendContact("f3", "Priya", "@priya_tech"),
@@ -568,8 +564,7 @@ fun PayPalFintechApp() {
                         coroutineScope.launch {
                             var totalCollected = 0.0
                             friendList.forEach { friend ->
-                                delay(600)
-                                friend.statusText = "PAID VIA PAYPAL ✅"
+                                delay(500)
                                 totalCollected += perPersonShare
                                 balance += perPersonShare
                                 monthlyCredit += perPersonShare
@@ -581,7 +576,7 @@ fun PayPalFintechApp() {
                                         amount = perPersonShare,
                                         type = TransactionType.CREDIT,
                                         date = "Just now",
-                                        tag = "[SANDBOX PAID]"
+                                        tag = "[SPLIT REIMBURSED]"
                                     )
                                 )
                             }
@@ -688,7 +683,7 @@ fun PayPalFintechApp() {
                                     modifier = Modifier.size(16.dp)
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text(text = "3. Sandbox Order Captured: ${if (liveSandboxTxId.isNotBlank()) liveSandboxTxId else "PAYID-APPROVED"}", fontSize = 11.sp, fontWeight = if (sandboxStep == 3) FontWeight.Bold else FontWeight.Normal)
+                                Text(text = "3. Sandbox Order Captured: ${liveSandboxTxId.ifBlank { "PAYID-APPROVED" }}", fontSize = 11.sp, fontWeight = if (sandboxStep == 3) FontWeight.Bold else FontWeight.Normal)
                             }
                         }
 
@@ -1947,8 +1942,12 @@ fun TabSplitBill(
     var billAmountText by remember { mutableStateOf("80.00") }
     var isMessageSent by remember { mutableStateOf(false) }
 
+    // Fully Reactive Compose Map for Friend Selection and Status
+    val selectedFriendsMap = remember { mutableStateMapOf<String, Boolean>() }
+    val friendStatusMap = remember { mutableStateMapOf<String, String>() }
+
     val totalAmount = billAmountText.toDoubleOrNull() ?: 0.0
-    val selectedCount = friends.count { it.isSelected }
+    val selectedCount = friends.count { selectedFriendsMap[it.id] == true }
     val totalPeople = selectedCount + 1
     val perPersonShare = if (totalPeople > 0) totalAmount / totalPeople else 0.0
 
@@ -2054,18 +2053,26 @@ fun TabSplitBill(
                     Spacer(modifier = Modifier.height(8.dp))
 
                     friends.forEach { friend ->
+                        val isSelected = selectedFriendsMap[friend.id] == true
+                        val currentStatus = friendStatusMap[friend.id] ?: "Not requested"
+
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable { friend.isSelected = !friend.isSelected }
-                                .padding(vertical = 6.dp),
+                                .clip(RoundedCornerShape(10.dp))
+                                .clickable {
+                                    selectedFriendsMap[friend.id] = !isSelected
+                                }
+                                .padding(vertical = 6.dp, horizontal = 4.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Checkbox(
-                                    checked = friend.isSelected,
-                                    onCheckedChange = { friend.isSelected = it }
+                                    checked = isSelected,
+                                    onCheckedChange = { checked ->
+                                        selectedFriendsMap[friend.id] = checked
+                                    }
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Column {
@@ -2074,18 +2081,18 @@ fun TabSplitBill(
                                 }
                             }
 
-                            if (isMessageSent) {
+                            if (isMessageSent && isSelected) {
                                 Box(
                                     modifier = Modifier
                                         .clip(RoundedCornerShape(8.dp))
-                                        .background(if (friend.statusText.contains("PAID")) MintSurface else AmberSurface)
+                                        .background(if (currentStatus.contains("PAID")) MintSurface else AmberSurface)
                                         .padding(horizontal = 8.dp, vertical = 4.dp)
                                 ) {
                                     Text(
-                                        text = friend.statusText,
+                                        text = currentStatus,
                                         fontSize = 10.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = if (friend.statusText.contains("PAID")) MintGreen else AmberDebit
+                                        color = if (currentStatus.contains("PAID")) MintGreen else AmberDebit
                                     )
                                 }
                             }
@@ -2148,9 +2155,9 @@ fun TabSplitBill(
                     ) {
                         Button(
                             onClick = {
-                                friends.forEach {
-                                    if (it.isSelected) {
-                                        it.statusText = "Message Sent • Waiting"
+                                friends.forEach { friend ->
+                                    if (selectedFriendsMap[friend.id] == true) {
+                                        friendStatusMap[friend.id] = "Message Sent • Waiting"
                                     }
                                 }
                                 isMessageSent = true
@@ -2165,8 +2172,11 @@ fun TabSplitBill(
 
                         Button(
                             onClick = {
-                                val selectedFriends = friends.filter { it.isSelected }
-                                onFriendsPaid(selectedFriends, perPersonShare)
+                                val activeSelected = friends.filter { selectedFriendsMap[it.id] == true }
+                                activeSelected.forEach { friend ->
+                                    friendStatusMap[friend.id] = "PAID VIA PAYPAL ✅"
+                                }
+                                onFriendsPaid(activeSelected, perPersonShare)
                             },
                             modifier = Modifier.weight(1f),
                             enabled = isMessageSent && selectedCount > 0,
@@ -2335,42 +2345,49 @@ fun TabAiAnalyst(
 
                     Spacer(modifier = Modifier.height(10.dp))
 
-                    // CHAT LOG BOX
+                    // CHAT LOG BOX (EXPANDED TO SHOW CHAT LOG CLEARLY)
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .heightIn(max = 160.dp)
+                            .height(200.dp)
                             .clip(RoundedCornerShape(12.dp))
                             .background(Color(0xFFF8FAFC))
-                            .padding(10.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                            .padding(10.dp)
                     ) {
-                        chatMessages.takeLast(4).forEach { msg ->
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = if (msg.isUser) Arrangement.End else Arrangement.Start
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(12.dp))
-                                        .background(if (msg.isUser) PayPalBlue else Color.White)
-                                        .border(1.dp, if (msg.isUser) Color.Transparent else CardBorder, RoundedCornerShape(12.dp))
-                                        .padding(8.dp)
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            items(chatMessages) { msg ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = if (msg.isUser) Arrangement.End else Arrangement.Start
                                 ) {
-                                    Text(
-                                        text = msg.text,
-                                        fontSize = 11.sp,
-                                        color = if (msg.isUser) Color.White else PayPalNavy
-                                    )
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(if (msg.isUser) PayPalBlue else Color.White)
+                                            .border(1.dp, if (msg.isUser) Color.Transparent else CardBorder, RoundedCornerShape(12.dp))
+                                            .padding(10.dp)
+                                    ) {
+                                        Text(
+                                            text = msg.text,
+                                            fontSize = 11.sp,
+                                            color = if (msg.isUser) Color.White else PayPalNavy,
+                                            fontWeight = if (msg.isUser) FontWeight.Normal else FontWeight.Medium
+                                        )
+                                    }
                                 }
                             }
-                        }
 
-                        if (isThinking) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                CircularProgressIndicator(color = PayPalBlue, modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(text = "PayPal AI is analyzing your live financial statement...", fontSize = 10.sp, color = Color.Gray, fontStyle = FontStyle.Italic)
+                            if (isThinking) {
+                                item {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        CircularProgressIndicator(color = PayPalBlue, modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(text = "PayPal AI is analyzing statement...", fontSize = 10.sp, color = Color.Gray, fontStyle = FontStyle.Italic)
+                                    }
+                                }
                             }
                         }
                     }
