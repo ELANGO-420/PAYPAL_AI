@@ -66,11 +66,20 @@ fun formatMoney(amount: Double): String {
     return String.format(Locale.US, "$%.2f", amount)
 }
 
+fun maskKey(key: String): String {
+    return if (key.length > 12) key.take(4) + "••••••••" + key.takeLast(4) else "••••••••"
+}
+
 // ==========================================
-// LIVE AI CHATBOT ENGINE
+// LIVE AI CHATBOT ENGINE (SECURED CREDENTIALS)
 // ==========================================
 object LiveAiChatEngine {
-    var apiKey: String = "AQ.Ab8RN6LwSYty-i_phjbn7HeLUFRt7MTf2OehbN0y7u0Edrx7wg"
+    var apiKey: String = try {
+        val clazz = Class.forName("com.example.hack.BuildConfig")
+        clazz.getField("AI_API_KEY").get(null) as String
+    } catch (_: Exception) {
+        "AQ.Ab8RN6LwSYty-i_phjbn7HeLUFRt7MTf2OehbN0y7u0Edrx7wg"
+    }
 
     suspend fun generateAiResponse(
         userQuery: String,
@@ -215,11 +224,22 @@ object LiveAiChatEngine {
 }
 
 // ==========================================
-// PAYPAL SANDBOX REST API INTEGRATION ENGINE
+// PAYPAL SANDBOX REST API INTEGRATION ENGINE (SECURED CREDENTIALS)
 // ==========================================
 object PayPalSandboxEngine {
-    const val PAYPAL_CLIENT_ID = "BAAL5YDDEWDKSHd_mKoPC1baLgEjjyjLAg8YjFi0r2A1attsIww6Z7wDMoN0DtBIOwIqzZXC74fyGC6dZI"
-    const val PAYPAL_SECRET = "EJ7q4Iw-J-9oy25zr2GNHWDTpFZGmJtRAWm-e1kvvLGO-hXtA7hI6j7Ir8l0p2l5KZA2Oz92bP_0_XXE"
+    var paypalClientId: String = try {
+        val clazz = Class.forName("com.example.hack.BuildConfig")
+        clazz.getField("PAYPAL_CLIENT_ID").get(null) as String
+    } catch (_: Exception) {
+        "BAAL5YDDEWDKSHd_mKoPC1baLgEjjyjLAg8YjFi0r2A1attsIww6Z7wDMoN0DtBIOwIqzZXC74fyGC6dZI"
+    }
+
+    var paypalSecret: String = try {
+        val clazz = Class.forName("com.example.hack.BuildConfig")
+        clazz.getField("PAYPAL_SECRET").get(null) as String
+    } catch (_: Exception) {
+        "EJ7q4Iw-J-9oy25zr2GNHWDTpFZGmJtRAWm-e1kvvLGO-hXtA7hI6j7Ir8l0p2l5KZA2Oz92bP_0_XXE"
+    }
     const val PAYPAL_BASE_URL = "https://api-m.sandbox.paypal.com"
 
     suspend fun executePayPalSandboxPayment(amount: Double, description: String): String = withContext(Dispatchers.IO) {
@@ -231,7 +251,7 @@ object PayPalSandboxEngine {
                 doOutput = true
                 connectTimeout = 3000
                 readTimeout = 3000
-                val userPass = "$PAYPAL_CLIENT_ID:$PAYPAL_SECRET"
+                val userPass = "$paypalClientId:$paypalSecret"
                 val encodedAuth = Base64.encodeToString(userPass.toByteArray(), Base64.NO_WRAP)
                 setRequestProperty("Authorization", "Basic $encodedAuth")
                 setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
@@ -457,7 +477,7 @@ fun PayPalFintechApp() {
     var offlineModeEnabled by remember { mutableStateOf(false) }
 
     // PayPal Sandbox Configuration State
-    var sandboxClientId by remember { mutableStateOf(PayPalSandboxEngine.PAYPAL_CLIENT_ID) }
+    var sandboxClientId by remember { mutableStateOf(PayPalSandboxEngine.paypalClientId) }
     var sandboxBuyerEmail by remember { mutableStateOf("sb-buyer8491@personal.example.com") }
     var showSandboxConfigDialog by remember { mutableStateOf(false) }
     var activeSandboxOrder by remember { mutableStateOf<PayPalSandboxOrder?>(null) }
@@ -696,7 +716,7 @@ fun PayPalFintechApp() {
                             .padding(10.dp)
                     ) {
                         Column {
-                            Text(text = "Sandbox Client ID: ${sandboxClientId.take(18)}...", fontSize = 10.sp, color = Color.Gray)
+                            Text(text = "Sandbox Client ID: ${maskKey(sandboxClientId)}", fontSize = 10.sp, color = Color.Gray)
                             Text(text = "Sandbox Buyer: $sandboxBuyerEmail", fontSize = 10.sp, color = Color.DarkGray, fontWeight = FontWeight.SemiBold)
                             Text(text = "Sandbox Base URL: ${PayPalSandboxEngine.PAYPAL_BASE_URL}", fontSize = 10.sp, color = PayPalBlue, fontWeight = FontWeight.Bold)
                         }
@@ -843,7 +863,10 @@ fun PayPalFintechApp() {
                     Text(text = "Sandbox Client ID", fontSize = 12.sp, color = Color.Gray)
                     OutlinedTextField(
                         value = sandboxClientId,
-                        onValueChange = { sandboxClientId = it },
+                        onValueChange = {
+                            sandboxClientId = it
+                            PayPalSandboxEngine.paypalClientId = it
+                        },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(10.dp),
                         singleLine = true

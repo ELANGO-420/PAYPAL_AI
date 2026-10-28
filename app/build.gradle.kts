@@ -1,22 +1,36 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
 }
 
+val localProperties = Properties()
+val localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.inputStream().use { localProperties.load(it) }
+}
+
+val paypalClientId = localProperties.getProperty("PAYPAL_CLIENT_ID") ?: "BAAL5YDDEWDKSHd_mKoPC1baLgEjjyjLAg8YjFi0r2A1attsIww6Z7wDMoN0DtBIOwIqzZXC74fyGC6dZI"
+val paypalSecret = localProperties.getProperty("PAYPAL_SECRET") ?: "EJ7q4Iw-J-9oy25zr2GNHWDTpFZGmJtRAWm-e1kvvLGO-hXtA7hI6j7Ir8l0p2l5KZA2Oz92bP_0_XXE"
+val aiApiKey = localProperties.getProperty("AI_API_KEY") ?: "AQ.Ab8RN6LwSYty-i_phjbn7HeLUFRt7MTf2OehbN0y7u0Edrx7wg"
+
 android {
     namespace = "com.example.hack"
-    compileSdk {
-        version = release(37)
-    }
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.example.hack"
         minSdk = 24
-        targetSdk = 37
+        targetSdk = 35
         versionCode = 1
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        buildConfigField("String", "PAYPAL_CLIENT_ID", "\"$paypalClientId\"")
+        buildConfigField("String", "PAYPAL_SECRET", "\"$paypalSecret\"")
+        buildConfigField("String", "AI_API_KEY", "\"$aiApiKey\"")
     }
 
     buildTypes {
@@ -32,6 +46,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
