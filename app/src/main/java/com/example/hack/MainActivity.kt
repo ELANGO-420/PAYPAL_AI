@@ -868,7 +868,7 @@ fun PayPalFintechApp() {
                             .padding(10.dp)
                     ) {
                         Column {
-                            Text(text = "Vault Key: ${maskKey(EncryptedSecretVault.getClientId())}", fontSize = 10.sp, color = Color.Gray, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(text = "Vault Key: •••••••••••••••• [ENCRYPTED & PROTECTED]", fontSize = 10.sp, color = Color.Gray, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             Text(text = "Sandbox Buyer: sb-buyer8491@personal.example.com", fontSize = 10.sp, color = Color.DarkGray, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             Text(text = "Sandbox Endpoint: ${PayPalSandboxEngine.PAYPAL_BASE_URL}", fontSize = 10.sp, color = PayPalBlue, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
@@ -995,9 +995,9 @@ fun PayPalFintechApp() {
 
     // PAYPAL SANDBOX CONFIGURATION SETTINGS DIALOG
     if (showSandboxConfigDialog) {
-        var inputClientId by remember { mutableStateOf(EncryptedSecretVault.getClientId()) }
-        var inputSecret by remember { mutableStateOf(EncryptedSecretVault.getSecret()) }
-        var inputAiKey by remember { mutableStateOf(EncryptedSecretVault.getAiKey()) }
+        var inputClientId by remember { mutableStateOf("••••••••••••••••") }
+        var inputSecret by remember { mutableStateOf("••••••••••••••••") }
+        var inputAiKey by remember { mutableStateOf("••••••••••••••••") }
 
         Dialog(onDismissRequest = { showSandboxConfigDialog = false }) {
             Card(
@@ -1016,7 +1016,7 @@ fun PayPalFintechApp() {
 
                     Spacer(modifier = Modifier.height(14.dp))
 
-                    Text(text = "Sandbox Client ID (Encrypted)", fontSize = 12.sp, color = Color.Gray)
+                    Text(text = "Sandbox Client ID (Protected & Masked)", fontSize = 12.sp, color = Color.Gray)
                     OutlinedTextField(
                         value = inputClientId,
                         onValueChange = { inputClientId = it },
@@ -1027,7 +1027,7 @@ fun PayPalFintechApp() {
 
                     Spacer(modifier = Modifier.height(10.dp))
 
-                    Text(text = "Sandbox Secret (Encrypted)", fontSize = 12.sp, color = Color.Gray)
+                    Text(text = "Sandbox Secret (Protected & Masked)", fontSize = 12.sp, color = Color.Gray)
                     OutlinedTextField(
                         value = inputSecret,
                         onValueChange = { inputSecret = it },
@@ -1038,7 +1038,7 @@ fun PayPalFintechApp() {
 
                     Spacer(modifier = Modifier.height(10.dp))
 
-                    Text(text = "AI Chatbot Key (Encrypted)", fontSize = 12.sp, color = Color.Gray)
+                    Text(text = "AI Chatbot Key (Protected & Masked)", fontSize = 12.sp, color = Color.Gray)
                     OutlinedTextField(
                         value = inputAiKey,
                         onValueChange = { inputAiKey = it },
@@ -1051,15 +1051,19 @@ fun PayPalFintechApp() {
 
                     Button(
                         onClick = {
-                            EncryptedSecretVault.updateCredentials(inputClientId, inputSecret, inputAiKey)
+                            val newClient = if (inputClientId != "••••••••••••••••" && inputClientId.isNotBlank()) inputClientId else EncryptedSecretVault.getClientId()
+                            val newSecret = if (inputSecret != "••••••••••••••••" && inputSecret.isNotBlank()) inputSecret else EncryptedSecretVault.getSecret()
+                            val newAiKey = if (inputAiKey != "••••••••••••••••" && inputAiKey.isNotBlank()) inputAiKey else EncryptedSecretVault.getAiKey()
+
+                            EncryptedSecretVault.updateCredentials(newClient, newSecret, newAiKey)
                             showSandboxConfigDialog = false
-                            Toast.makeText(context, "Obfuscated Vault Credentials Updated!", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "Obfuscated Vault Credentials Re-encrypted!", Toast.LENGTH_SHORT).show()
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = PayPalNavy),
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text(text = "Encrypt & Save Vault", fontWeight = FontWeight.Bold)
+                        Text(text = "Re-Encrypt & Save Vault", fontWeight = FontWeight.Bold)
                     }
                 }
             }
