@@ -32,6 +32,7 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -410,55 +411,57 @@ fun PayPalLogoBadge(modifier: Modifier = Modifier, height: Dp = 34.dp) {
     Surface(
         modifier = modifier
             .height(height)
-            .shadow(3.dp, RoundedCornerShape(10.dp)),
+            .shadow(2.dp, RoundedCornerShape(10.dp)),
         shape = RoundedCornerShape(10.dp),
         color = Color.White,
-        border = BorderStroke(1.dp, Color(0xFF0070BA).copy(alpha = 0.4f))
+        border = BorderStroke(1.dp, Color(0xFF0070BA).copy(alpha = 0.3f))
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 2.dp),
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center
         ) {
+            // DOUBLE 'P' LOGO CONTAINED PERFECTLY INSIDE BOUNDS
             Box(
                 modifier = Modifier
-                    .height(height * 0.75f)
-                    .width(height * 0.75f),
+                    .size(height * 0.8f)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(PayPalNavy.copy(alpha = 0.05f)),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
                     text = "P",
                     color = Color(0xFF0070BA),
                     fontWeight = FontWeight.Black,
-                    fontSize = (height.value * 0.58f).sp,
+                    fontSize = (height.value * 0.52f).sp,
                     fontStyle = FontStyle.Italic,
-                    modifier = Modifier.offset(x = 3.dp, y = 0.dp)
+                    modifier = Modifier.offset(x = 2.dp, y = (-1).dp)
                 )
                 Text(
                     text = "P",
                     color = Color(0xFF001845),
                     fontWeight = FontWeight.Black,
-                    fontSize = (height.value * 0.58f).sp,
+                    fontSize = (height.value * 0.52f).sp,
                     fontStyle = FontStyle.Italic,
-                    modifier = Modifier.offset(x = (-3).dp, y = 0.dp)
+                    modifier = Modifier.offset(x = (-2).dp, y = 1.dp)
                 )
             }
 
-            Spacer(modifier = Modifier.width(4.dp))
+            Spacer(modifier = Modifier.width(6.dp))
 
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     text = "Pay",
                     color = Color(0xFF001845),
                     fontWeight = FontWeight.ExtraBold,
-                    fontSize = (height.value * 0.52f).sp,
+                    fontSize = (height.value * 0.48f).sp,
                     fontStyle = FontStyle.Italic
                 )
                 Text(
                     text = "Pal",
                     color = Color(0xFF0070BA),
                     fontWeight = FontWeight.ExtraBold,
-                    fontSize = (height.value * 0.52f).sp,
+                    fontSize = (height.value * 0.48f).sp,
                     fontStyle = FontStyle.Italic
                 )
             }
@@ -847,7 +850,7 @@ fun PayPalFintechApp() {
                                 .background(Color(0xFFFEF3C7))
                                 .padding(horizontal = 8.dp, vertical = 4.dp)
                         ) {
-                            Text(text = "SANDBOX API ACTIVE", color = Color(0xFFD97706), fontWeight = FontWeight.Bold, fontSize = 10.sp)
+                            Text(text = "SANDBOX API ACTIVE", color = Color(0xFFD97706), fontWeight = FontWeight.Bold, fontSize = 10.sp, maxLines = 1)
                         }
                     }
 
@@ -865,9 +868,9 @@ fun PayPalFintechApp() {
                             .padding(10.dp)
                     ) {
                         Column {
-                            Text(text = "Vault Key: ${maskKey(EncryptedSecretVault.getClientId())}", fontSize = 10.sp, color = Color.Gray)
-                            Text(text = "Sandbox Buyer: sb-buyer8491@personal.example.com", fontSize = 10.sp, color = Color.DarkGray, fontWeight = FontWeight.SemiBold)
-                            Text(text = "Sandbox Endpoint: ${PayPalSandboxEngine.PAYPAL_BASE_URL}", fontSize = 10.sp, color = PayPalBlue, fontWeight = FontWeight.Bold)
+                            Text(text = "Vault Key: ${maskKey(EncryptedSecretVault.getClientId())}", fontSize = 10.sp, color = Color.Gray, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(text = "Sandbox Buyer: sb-buyer8491@personal.example.com", fontSize = 10.sp, color = Color.DarkGray, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(text = "Sandbox Endpoint: ${PayPalSandboxEngine.PAYPAL_BASE_URL}", fontSize = 10.sp, color = PayPalBlue, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                     }
 
@@ -1311,11 +1314,12 @@ fun FirebaseAuditLogDialog(onDismiss: () -> Unit) {
                                                     "BLOCKED" -> CrimsonRed
                                                     "AUTHENTICATED" -> IndigoOffline
                                                     else -> AmberDebit
-                                                }
+                                                },
+                                                maxLines = 1
                                             )
                                         }
                                         Spacer(modifier = Modifier.width(6.dp))
-                                        Text(text = "[${log.category}] ${log.event}", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = PayPalNavy)
+                                        Text(text = "[${log.category}] ${log.event}", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = PayPalNavy, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                     }
 
                                     Text(text = log.timestamp, fontSize = 10.sp, color = Color.Gray)
@@ -1364,13 +1368,15 @@ fun HeaderBar(
                             text = "Paypal AI",
                             color = Color.White,
                             fontWeight = FontWeight.ExtraBold,
-                            fontSize = 15.sp
+                            fontSize = 15.sp,
+                            maxLines = 1
                         )
                         Text(
                             text = if (offlineMode) "OFFLINE MESH MODE" else "SANDBOX ACTIVE",
                             color = if (offlineMode) Color(0xFFA5B4FC) else Color(0xFF93C5FD),
                             fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1
                         )
                     }
                 }
@@ -1386,7 +1392,7 @@ fun HeaderBar(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Default.Lock, contentDescription = "Firebase Audit", tint = Color.White, modifier = Modifier.size(13.dp))
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text(text = "Firebase", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            Text(text = "Firebase", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                         }
                     }
 
@@ -1402,7 +1408,7 @@ fun HeaderBar(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Default.Settings, contentDescription = "Vault Config", tint = Color.White, modifier = Modifier.size(13.dp))
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text(text = "Vault", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            Text(text = "Vault", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                         }
                     }
                 }
@@ -1445,7 +1451,8 @@ fun NavBottomBar(selectedTab: Int, onTabSelected: (Int) -> Unit) {
                         text = label,
                         fontSize = 10.sp,
                         fontWeight = if (selectedTab == index) FontWeight.Bold else FontWeight.Normal,
-                        color = if (selectedTab == index) PayPalBlue else Color.Gray
+                        color = if (selectedTab == index) PayPalBlue else Color.Gray,
+                        maxLines = 1
                     )
                 },
                 colors = NavigationBarItemDefaults.colors(
@@ -1512,7 +1519,8 @@ fun TabHomeEscrow(
                                     text = "Real Wallet",
                                     color = Color(0xFF93C5FD),
                                     fontSize = 12.sp,
-                                    fontWeight = FontWeight.Medium
+                                    fontWeight = FontWeight.Medium,
+                                    maxLines = 1
                                 )
                             }
                             Box(
@@ -1525,7 +1533,8 @@ fun TabHomeEscrow(
                                     text = "SANDBOX PROTECTED",
                                     color = Color.White,
                                     fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1
                                 )
                             }
                         }
@@ -1535,7 +1544,8 @@ fun TabHomeEscrow(
                             text = formatMoney(balance),
                             color = Color.White,
                             fontSize = 36.sp,
-                            fontWeight = FontWeight.ExtraBold
+                            fontWeight = FontWeight.ExtraBold,
+                            maxLines = 1
                         )
 
                         Spacer(modifier = Modifier.height(16.dp))
@@ -1554,8 +1564,8 @@ fun TabHomeEscrow(
                                     .padding(8.dp)
                             ) {
                                 Column {
-                                    Text(text = "Monthly Credit", color = Color(0xFFA7F3D0), fontSize = 10.sp)
-                                    Text(text = "+${formatMoney(monthlyCredit)}", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                    Text(text = "Monthly Credit", color = Color(0xFFA7F3D0), fontSize = 10.sp, maxLines = 1)
+                                    Text(text = "+${formatMoney(monthlyCredit)}", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 1)
                                 }
                             }
 
@@ -1568,8 +1578,8 @@ fun TabHomeEscrow(
                                     .padding(8.dp)
                             ) {
                                 Column {
-                                    Text(text = "Monthly Debit", color = Color(0xFFFDE68A), fontSize = 10.sp)
-                                    Text(text = "-${formatMoney(monthlyDebit)}", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                    Text(text = "Monthly Debit", color = Color(0xFFFDE68A), fontSize = 10.sp, maxLines = 1)
+                                    Text(text = "-${formatMoney(monthlyDebit)}", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 1)
                                 }
                             }
 
@@ -1582,8 +1592,8 @@ fun TabHomeEscrow(
                                     .padding(8.dp)
                             ) {
                                 Column {
-                                    Text(text = "Saved by AI", color = Color(0xFF6EE7B7), fontSize = 10.sp)
-                                    Text(text = formatMoney(savedByAi), color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                    Text(text = "Saved by AI", color = Color(0xFF6EE7B7), fontSize = 10.sp, maxLines = 1)
+                                    Text(text = formatMoney(savedByAi), color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 1)
                                 }
                             }
                         }
@@ -1604,7 +1614,8 @@ fun TabHomeEscrow(
                                     text = "Scams Blocked: ${formatMoney(protectedFromScams)} Saved",
                                     color = Color.White,
                                     fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1
                                 )
                             }
                         }
@@ -1631,9 +1642,9 @@ fun TabHomeEscrow(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             PayPalLogoBadge(height = 24.dp)
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text(text = "PayPal Sandbox Top-up", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = PayPalNavy)
+                            Text(text = "PayPal Sandbox Top-up", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = PayPalNavy, maxLines = 1)
                         }
-                        Text(text = "Environment: SANDBOX", fontSize = 10.sp, color = AmberDebit, fontWeight = FontWeight.Bold)
+                        Text(text = "Environment: SANDBOX", fontSize = 10.sp, color = AmberDebit, fontWeight = FontWeight.Bold, maxLines = 1)
                     }
 
                     Spacer(modifier = Modifier.height(10.dp))
@@ -1661,7 +1672,7 @@ fun TabHomeEscrow(
                             colors = ButtonDefaults.buttonColors(containerColor = PayPalBlue),
                             shape = RoundedCornerShape(10.dp)
                         ) {
-                            Text(text = "Add Sandbox Funds", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                            Text(text = "Add Sandbox Funds", fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 1)
                         }
                     }
                 }
@@ -1680,12 +1691,15 @@ fun TabHomeEscrow(
                         text = "Smart Usage-Verified Escrow",
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
-                        color = PayPalNavy
+                        color = PayPalNavy,
+                        maxLines = 1
                     )
                     Text(
                         text = "Subscriptions held in Escrow & released on verified usage.",
                         fontSize = 11.sp,
-                        color = Color.Gray
+                        color = Color.Gray,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
 
@@ -1696,7 +1710,7 @@ fun TabHomeEscrow(
                 ) {
                     Icon(Icons.Default.Add, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text(text = "Add Custom", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Text(text = "Add Custom", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                 }
             }
         }
@@ -1723,13 +1737,15 @@ fun TabHomeEscrow(
                                 text = sub.title,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 16.sp,
-                                color = PayPalNavy
+                                color = PayPalNavy,
+                                maxLines = 1
                             )
                             Text(
                                 text = "${formatMoney(sub.costPerDay)} / day",
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.SemiBold,
-                                color = PayPalBlue
+                                color = PayPalBlue,
+                                maxLines = 1
                             )
                         }
 
@@ -1743,7 +1759,8 @@ fun TabHomeEscrow(
                                 text = sub.statusText,
                                 color = Color.White,
                                 fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1
                             )
                         }
                     }
@@ -1764,7 +1781,9 @@ fun TabHomeEscrow(
                             text = "Tracked via: ${sub.trackingBadge}",
                             fontSize = 11.sp,
                             color = Color.DarkGray,
-                            fontWeight = FontWeight.Medium
+                            fontWeight = FontWeight.Medium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
 
@@ -1781,7 +1800,7 @@ fun TabHomeEscrow(
                             colors = ButtonDefaults.buttonColors(containerColor = MintGreen),
                             shape = RoundedCornerShape(10.dp)
                         ) {
-                            Text(text = "Verify & Pay", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            Text(text = "Verify & Pay", fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                         }
 
                         OutlinedButton(
@@ -1791,7 +1810,7 @@ fun TabHomeEscrow(
                             colors = ButtonDefaults.outlinedButtonColors(contentColor = PayPalNavy),
                             shape = RoundedCornerShape(10.dp)
                         ) {
-                            Text(text = "Phone-less Check-In", fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                            Text(text = "Phone-less Check-In", fontSize = 9.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                         }
 
                         OutlinedButton(
@@ -1801,7 +1820,7 @@ fun TabHomeEscrow(
                             colors = ButtonDefaults.outlinedButtonColors(contentColor = AmberDebit),
                             shape = RoundedCornerShape(10.dp)
                         ) {
-                            Text(text = "Simulate 5D Idle", fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                            Text(text = "Simulate 5D Idle", fontSize = 9.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                         }
                     }
                 }
@@ -1855,12 +1874,14 @@ fun TabOfflinePay(
                                 text = "Offline SMS Payment Mode",
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 16.sp,
-                                color = if (offlineModeEnabled) IndigoOffline else PayPalNavy
+                                color = if (offlineModeEnabled) IndigoOffline else PayPalNavy,
+                                maxLines = 1
                             )
                             Text(
                                 text = "No Internet / SMS-USSD Tunnel",
                                 fontSize = 12.sp,
-                                color = Color.Gray
+                                color = Color.Gray,
+                                maxLines = 1
                             )
                         }
                         Switch(
@@ -1890,7 +1911,8 @@ fun TabOfflinePay(
                                         text = "OFFLINE MESH ACTIVE",
                                         color = Color.White,
                                         fontWeight = FontWeight.Bold,
-                                        fontSize = 12.sp
+                                        fontSize = 12.sp,
+                                        maxLines = 1
                                     )
                                     Text(
                                         text = "No Mobile Data required. Payments are compressed into an encrypted SMS token and settled via PayPal Telecom Gateway.",
@@ -1912,7 +1934,8 @@ fun TabOfflinePay(
                     text = "Select Offline Merchant / Contact",
                     fontWeight = FontWeight.Bold,
                     fontSize = 15.sp,
-                    color = PayPalNavy
+                    color = PayPalNavy,
+                    maxLines = 1
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -2144,7 +2167,8 @@ fun TabScamShield(
                             text = "PayPal AI Scam Shield Active",
                             color = Color.White,
                             fontWeight = FontWeight.Bold,
-                            fontSize = 17.sp
+                            fontSize = 17.sp,
+                            maxLines = 1
                         )
                     }
                     Spacer(modifier = Modifier.height(6.dp))
@@ -2167,12 +2191,13 @@ fun TabScamShield(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(text = "Total Protected from Scammers:", color = Color.White, fontSize = 12.sp)
+                            Text(text = "Total Protected from Scammers:", color = Color.White, fontSize = 12.sp, maxLines = 1)
                             Text(
                                 text = formatMoney(protectedFromScams),
                                 color = Color.White,
                                 fontWeight = FontWeight.ExtraBold,
-                                fontSize = 16.sp
+                                fontSize = 16.sp,
+                                maxLines = 1
                             )
                         }
                     }
@@ -2185,7 +2210,8 @@ fun TabScamShield(
                 text = "Test Live Fraud Detection Scenarios",
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold,
-                color = PayPalNavy
+                color = PayPalNavy,
+                maxLines = 1
             )
         }
 
@@ -2215,16 +2241,18 @@ fun TabScamShield(
                                 text = target.name,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 15.sp,
-                                color = PayPalNavy
+                                color = PayPalNavy,
+                                maxLines = 1
                             )
-                            Text(text = target.handle, fontSize = 11.sp, color = Color.Gray)
+                            Text(text = target.handle, fontSize = 11.sp, color = Color.Gray, maxLines = 1)
                         }
 
                         Text(
                             text = formatMoney(target.defaultAmount),
                             fontWeight = FontWeight.ExtraBold,
                             fontSize = 16.sp,
-                            color = if (target.isScam) CrimsonRed else MintGreen
+                            color = if (target.isScam) CrimsonRed else MintGreen,
+                            maxLines = 1
                         )
                     }
 
@@ -2249,7 +2277,8 @@ fun TabScamShield(
                         Text(
                             text = if (target.isScam) "Attempt Scam Transfer (${formatMoney(target.defaultAmount)})" else "Pay via PayPal Sandbox (${formatMoney(target.defaultAmount)})",
                             fontWeight = FontWeight.Bold,
-                            fontSize = 12.sp
+                            fontSize = 12.sp,
+                            maxLines = 1
                         )
                     }
                 }
@@ -2366,7 +2395,8 @@ fun TabScamShield(
                             text = "AI FRAUD RISK SCORE: ${activeAlertTarget!!.riskScore}",
                             color = Color.White,
                             fontWeight = FontWeight.Bold,
-                            fontSize = 11.sp
+                            fontSize = 11.sp,
+                            maxLines = 1
                         )
                     }
 
@@ -2497,7 +2527,8 @@ fun TabSplitBill(
                                 text = "Wallet: ${formatMoney(balance)}",
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = MintGreen
+                                color = MintGreen,
+                                maxLines = 1
                             )
                         }
                     }
@@ -2603,7 +2634,8 @@ fun TabSplitBill(
                                         text = currentStatus,
                                         fontSize = 10.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = if (currentStatus.contains("PAID")) MintGreen else AmberDebit
+                                        color = if (currentStatus.contains("PAID")) MintGreen else AmberDebit,
+                                        maxLines = 1
                                     )
                                 }
                             }
@@ -2678,7 +2710,7 @@ fun TabSplitBill(
                             colors = ButtonDefaults.buttonColors(containerColor = PayPalNavy),
                             shape = RoundedCornerShape(10.dp)
                         ) {
-                            Text(text = "Send Split Request", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            Text(text = "Send Split Request", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                         }
 
                         Button(
@@ -2694,7 +2726,7 @@ fun TabSplitBill(
                             colors = ButtonDefaults.buttonColors(containerColor = MintGreen),
                             shape = RoundedCornerShape(10.dp)
                         ) {
-                            Text(text = "Simulate Friends Paying", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            Text(text = "Simulate Friends Paying", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                         }
                     }
                 }
@@ -2780,8 +2812,8 @@ fun TabAiAnalyst(
                                 .padding(10.dp)
                         ) {
                             Column {
-                                Text(text = "Total Credit", fontSize = 10.sp, color = MintGreen, fontWeight = FontWeight.Bold)
-                                Text(text = "+${formatMoney(monthlyCredit)}", fontSize = 13.sp, color = MintGreen, fontWeight = FontWeight.ExtraBold)
+                                Text(text = "Total Credit", fontSize = 10.sp, color = MintGreen, fontWeight = FontWeight.Bold, maxLines = 1)
+                                Text(text = "+${formatMoney(monthlyCredit)}", fontSize = 13.sp, color = MintGreen, fontWeight = FontWeight.ExtraBold, maxLines = 1)
                             }
                         }
 
@@ -2794,8 +2826,8 @@ fun TabAiAnalyst(
                                 .padding(10.dp)
                         ) {
                             Column {
-                                Text(text = "Total Debit", fontSize = 10.sp, color = AmberDebit, fontWeight = FontWeight.Bold)
-                                Text(text = "-${formatMoney(monthlyDebit)}", fontSize = 13.sp, color = AmberDebit, fontWeight = FontWeight.ExtraBold)
+                                Text(text = "Total Debit", fontSize = 10.sp, color = AmberDebit, fontWeight = FontWeight.Bold, maxLines = 1)
+                                Text(text = "-${formatMoney(monthlyDebit)}", fontSize = 13.sp, color = AmberDebit, fontWeight = FontWeight.ExtraBold, maxLines = 1)
                             }
                         }
 
@@ -2808,8 +2840,8 @@ fun TabAiAnalyst(
                                 .padding(10.dp)
                         ) {
                             Column {
-                                Text(text = "Net Cashflow", fontSize = 10.sp, color = IndigoOffline, fontWeight = FontWeight.Bold)
-                                Text(text = formatMoney(netCashflow), fontSize = 13.sp, color = IndigoOffline, fontWeight = FontWeight.ExtraBold)
+                                Text(text = "Net Cashflow", fontSize = 10.sp, color = IndigoOffline, fontWeight = FontWeight.Bold, maxLines = 1)
+                                Text(text = formatMoney(netCashflow), fontSize = 13.sp, color = IndigoOffline, fontWeight = FontWeight.ExtraBold, maxLines = 1)
                             }
                         }
                     }
@@ -3003,13 +3035,13 @@ fun TabAiAnalyst(
 
                         Column {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(text = tx.title, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = PayPalNavy)
+                                Text(text = tx.title, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = PayPalNavy, maxLines = 1)
                                 if (tx.tag.isNotEmpty()) {
                                     Spacer(modifier = Modifier.width(6.dp))
-                                    Text(text = tx.tag, fontSize = 9.sp, fontWeight = FontWeight.Bold, color = PayPalBlue)
+                                    Text(text = tx.tag, fontSize = 9.sp, fontWeight = FontWeight.Bold, color = PayPalBlue, maxLines = 1)
                                 }
                             }
-                            Text(text = "${tx.category} • ${tx.date}", fontSize = 11.sp, color = Color.Gray)
+                            Text(text = "${tx.category} • ${tx.date}", fontSize = 11.sp, color = Color.Gray, maxLines = 1)
                         }
                     }
 
@@ -3023,7 +3055,8 @@ fun TabAiAnalyst(
                             text = if (tx.type == TransactionType.CREDIT) "+${formatMoney(tx.amount)}" else "-${formatMoney(tx.amount)}",
                             fontWeight = FontWeight.ExtraBold,
                             fontSize = 12.sp,
-                            color = if (tx.type == TransactionType.CREDIT) MintGreen else AmberDebit
+                            color = if (tx.type == TransactionType.CREDIT) MintGreen else AmberDebit,
+                            maxLines = 1
                         )
                     }
                 }
