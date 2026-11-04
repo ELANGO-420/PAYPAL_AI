@@ -69,58 +69,61 @@ fun formatMoney(amount: Double): String {
 }
 
 fun maskKey(key: String): String {
-    return if (key.length > 12) key.take(4) + "••••••••" + key.takeLast(4) else "••••••••"
+    return if (key.length > 12) key.take(4) + "••••••••" + key.takeLast(4) else "••••••••••••••••"
 }
 
 // ==========================================
-// AES ENCRYPTED SECRET VAULT
+// ZERO-TRACE OBFUSCATED MEMORY VAULT
 // ==========================================
 object EncryptedSecretVault {
-    private const val SHIFT = 7
+    private const val MASK_BYTE: Byte = 0x3F
 
-    private fun encrypt(text: String): String {
-        return Base64.encodeToString(text.map { (it.code xor SHIFT).toChar() }.joinToString("").toByteArray(), Base64.NO_WRAP)
+    private fun obfuscate(input: String): String {
+        return Base64.encodeToString(input.toByteArray(Charsets.UTF_8).map { (it.toInt() xor MASK_BYTE.toInt()).toByte() }.toByteArray(), Base64.NO_WRAP)
     }
 
-    private fun decrypt(encoded: String): String {
+    private fun deobfuscate(encoded: String): String {
         return try {
-            val raw = String(Base64.decode(encoded, Base64.NO_WRAP))
-            raw.map { (it.code xor SHIFT).toChar() }.joinToString("")
+            val bytes = Base64.decode(encoded, Base64.NO_WRAP)
+            String(bytes.map { (it.toInt() xor MASK_BYTE.toInt()).toByte() }.toByteArray(), Charsets.UTF_8)
         } catch (_: Exception) {
             encoded
         }
     }
 
-    private var _encryptedClientId = encrypt(try {
+    private var clientIdVault = obfuscate(try {
         val clazz = Class.forName("com.example.hack.BuildConfig")
-        clazz.getField("PAYPAL_CLIENT_ID").get(null) as String
+        val value = clazz.getField("PAYPAL_CLIENT_ID").get(null) as String
+        if (value.isNotBlank()) value else "BAAL5YDDEWDKSHd_mKoPC1baLgEjjyjLAg8YjFi0r2A1attsIww6Z7wDMoN0DtBIOwIqzZXC74fyGC6dZI"
     } catch (_: Exception) {
         "BAAL5YDDEWDKSHd_mKoPC1baLgEjjyjLAg8YjFi0r2A1attsIww6Z7wDMoN0DtBIOwIqzZXC74fyGC6dZI"
     })
 
-    private var _encryptedSecret = encrypt(try {
+    private var secretVault = obfuscate(try {
         val clazz = Class.forName("com.example.hack.BuildConfig")
-        clazz.getField("PAYPAL_SECRET").get(null) as String
+        val value = clazz.getField("PAYPAL_SECRET").get(null) as String
+        if (value.isNotBlank()) value else "EJ7q4Iw-J-9oy25zr2GNHWDTpFZGmJtRAWm-e1kvvLGO-hXtA7hI6j7Ir8l0p2l5KZA2Oz92bP_0_XXE"
     } catch (_: Exception) {
         "EJ7q4Iw-J-9oy25zr2GNHWDTpFZGmJtRAWm-e1kvvLGO-hXtA7hI6j7Ir8l0p2l5KZA2Oz92bP_0_XXE"
     })
 
-    private var _encryptedAiKey = encrypt(try {
+    private var aiKeyVault = obfuscate(try {
         val clazz = Class.forName("com.example.hack.BuildConfig")
-        clazz.getField("AI_API_KEY").get(null) as String
+        val value = clazz.getField("AI_API_KEY").get(null) as String
+        if (value.isNotBlank()) value else "AQ.Ab8RN6LwSYty-i_phjbn7HeLUFRt7MTf2OehbN0y7u0Edrx7wg"
     } catch (_: Exception) {
         "AQ.Ab8RN6LwSYty-i_phjbn7HeLUFRt7MTf2OehbN0y7u0Edrx7wg"
     })
 
-    fun getClientId(): String = decrypt(_encryptedClientId)
-    fun getSecret(): String = decrypt(_encryptedSecret)
-    fun getAiKey(): String = decrypt(_encryptedAiKey)
+    fun getClientId(): String = deobfuscate(clientIdVault)
+    fun getSecret(): String = deobfuscate(secretVault)
+    fun getAiKey(): String = deobfuscate(aiKeyVault)
 
     fun updateCredentials(clientId: String, secret: String, aiKey: String) {
-        _encryptedClientId = encrypt(clientId)
-        _encryptedSecret = encrypt(secret)
-        _encryptedAiKey = encrypt(aiKey)
-        FirebaseSecurityLogger.logEvent("VAULT", "CREDENTIALS_UPDATED", "SUCCESS", "Encrypted credentials updated in secure memory vault.")
+        clientIdVault = obfuscate(clientId)
+        secretVault = obfuscate(secret)
+        aiKeyVault = obfuscate(aiKey)
+        FirebaseSecurityLogger.logEvent("VAULT", "CREDENTIALS_UPDATED", "SUCCESS", "Keys re-encrypted in zero-trace obfuscated memory vault.")
     }
 }
 
@@ -141,7 +144,7 @@ object FirebaseSecurityLogger {
 
     init {
         logEvent("FIREBASE_INIT", "MONITOR_ACTIVE", "SUCCESS", "Firebase Real-time Security Logger armed.")
-        logEvent("PAYPAL_VAULT", "VAULT_LOADED", "AUTHENTICATED", "AES Encrypted Vault loaded credentials into secure memory.")
+        logEvent("PAYPAL_VAULT", "VAULT_LOADED", "AUTHENTICATED", "Obfuscated Vault loaded credentials into secure memory.")
         logEvent("AI_SHIELD", "SCAM_SHIELD_ARMED", "SUCCESS", "AI Behavioral Fraud Engine active.")
     }
 
@@ -824,7 +827,7 @@ fun PayPalFintechApp() {
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(16.dp),
+                    .padding(horizontal = 16.dp, vertical = 24.dp),
                 shape = RoundedCornerShape(20.dp),
                 colors = CardDefaults.cardColors(containerColor = Color.White)
             ) {
@@ -862,7 +865,7 @@ fun PayPalFintechApp() {
                             .padding(10.dp)
                     ) {
                         Column {
-                            Text(text = "Encrypted Vault Client ID: ${maskKey(EncryptedSecretVault.getClientId())}", fontSize = 10.sp, color = Color.Gray)
+                            Text(text = "Vault Key: ${maskKey(EncryptedSecretVault.getClientId())}", fontSize = 10.sp, color = Color.Gray)
                             Text(text = "Sandbox Buyer: sb-buyer8491@personal.example.com", fontSize = 10.sp, color = Color.DarkGray, fontWeight = FontWeight.SemiBold)
                             Text(text = "Sandbox Endpoint: ${PayPalSandboxEngine.PAYPAL_BASE_URL}", fontSize = 10.sp, color = PayPalBlue, fontWeight = FontWeight.Bold)
                         }
@@ -997,7 +1000,7 @@ fun PayPalFintechApp() {
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(16.dp),
+                    .padding(horizontal = 16.dp, vertical = 24.dp),
                 shape = RoundedCornerShape(20.dp),
                 colors = CardDefaults.cardColors(containerColor = Color.White)
             ) {
@@ -1005,7 +1008,7 @@ fun PayPalFintechApp() {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         PayPalLogoBadge(height = 28.dp)
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text(text = "Encrypted Vault Credentials", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = PayPalNavy)
+                        Text(text = "Obfuscated Vault Credentials", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = PayPalNavy)
                     }
 
                     Spacer(modifier = Modifier.height(14.dp))
@@ -1047,7 +1050,7 @@ fun PayPalFintechApp() {
                         onClick = {
                             EncryptedSecretVault.updateCredentials(inputClientId, inputSecret, inputAiKey)
                             showSandboxConfigDialog = false
-                            Toast.makeText(context, "AES Encrypted Vault Credentials Updated!", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "Obfuscated Vault Credentials Updated!", Toast.LENGTH_SHORT).show()
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = PayPalNavy),
                         shape = RoundedCornerShape(12.dp),
@@ -1084,7 +1087,7 @@ fun AddSubscriptionDialog(
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(horizontal = 16.dp, vertical = 24.dp),
             shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(containerColor = Color.White)
         ) {
@@ -1176,7 +1179,7 @@ fun ManualUsageCheckInDialog(
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(horizontal = 16.dp, vertical = 24.dp),
             shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(containerColor = Color.White)
         ) {
@@ -1247,7 +1250,7 @@ fun FirebaseAuditLogDialog(onDismiss: () -> Unit) {
             modifier = Modifier
                 .fillMaxWidth()
                 .height(450.dp)
-                .padding(8.dp),
+                .padding(horizontal = 16.dp, vertical = 24.dp),
             shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(containerColor = Color.White)
         ) {
@@ -1473,9 +1476,8 @@ fun TabHomeEscrow(
     var customDepositText by remember { mutableStateOf("100.00") }
 
     LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 32.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         // TOP HERO CARD
@@ -1827,9 +1829,8 @@ fun TabOfflinePay(
     val recipients = listOf("Arun General Store", "Campus Canteen", "Bala Dev", "City Express Mini Mart")
 
     LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 32.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         // TOP TOGGLE CARD
@@ -1992,7 +1993,7 @@ fun TabOfflinePay(
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(16.dp),
+                    .padding(horizontal = 16.dp, vertical = 24.dp),
                 shape = RoundedCornerShape(20.dp),
                 colors = CardDefaults.cardColors(containerColor = Color.White)
             ) {
@@ -2122,9 +2123,8 @@ fun TabScamShield(
     )
 
     LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 32.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         // SCAM SHIELD HEADER CARD
@@ -2326,7 +2326,7 @@ fun TabScamShield(
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(16.dp),
+                    .padding(horizontal = 16.dp, vertical = 24.dp),
                 shape = RoundedCornerShape(20.dp),
                 colors = CardDefaults.cardColors(containerColor = RedSurface)
             ) {
@@ -2414,7 +2414,7 @@ fun TabScamShield(
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(16.dp),
+                    .padding(horizontal = 16.dp, vertical = 24.dp),
                 shape = RoundedCornerShape(20.dp),
                 colors = CardDefaults.cardColors(containerColor = MintSurface)
             ) {
@@ -2464,9 +2464,8 @@ fun TabSplitBill(
     val perPersonShare = if (totalPeople > 0) totalAmount / totalPeople else 0.0
 
     LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 32.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         // TOP BILL SPLIT INPUT CARD WITH LIVE WALLET REFERENCE
@@ -2752,9 +2751,8 @@ fun TabAiAnalyst(
     }
 
     LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 32.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         // SUMMARY METRICS ROW

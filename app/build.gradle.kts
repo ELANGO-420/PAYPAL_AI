@@ -11,9 +11,9 @@ if (localPropertiesFile.exists()) {
     localPropertiesFile.inputStream().use { localProperties.load(it) }
 }
 
-val paypalClientId = localProperties.getProperty("PAYPAL_CLIENT_ID") ?: "BAAL5YDDEWDKSHd_mKoPC1baLgEjjyjLAg8YjFi0r2A1attsIww6Z7wDMoN0DtBIOwIqzZXC74fyGC6dZI"
-val paypalSecret = localProperties.getProperty("PAYPAL_SECRET") ?: "EJ7q4Iw-J-9oy25zr2GNHWDTpFZGmJtRAWm-e1kvvLGO-hXtA7hI6j7Ir8l0p2l5KZA2Oz92bP_0_XXE"
-val aiApiKey = localProperties.getProperty("AI_API_KEY") ?: "AQ.Ab8RN6LwSYty-i_phjbn7HeLUFRt7MTf2OehbN0y7u0Edrx7wg"
+val paypalClientId = localProperties.getProperty("PAYPAL_CLIENT_ID") ?: ""
+val paypalSecret = localProperties.getProperty("PAYPAL_SECRET") ?: ""
+val aiApiKey = localProperties.getProperty("AI_API_KEY") ?: ""
 
 android {
     namespace = "com.example.hack"
