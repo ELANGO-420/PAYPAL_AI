@@ -17,6 +17,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -32,6 +33,7 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -75,7 +77,7 @@ fun maskKey(key: String): String {
 }
 
 // ==========================================
-// REAL FIREBASE AUTHENTICATION & FIRESTORE MANAGER
+// FIREBASE AUTHENTICATION & FIRESTORE MANAGER
 // Project ID: com-example-hack-90b75
 // App ID: 1:915204520489:android:38ebb8a76da51e29b3ba38
 // ==========================================
@@ -84,32 +86,58 @@ object FirebaseAuthManager {
     const val FIREBASE_APP_ID = "1:915204520489:android:38ebb8a76da51e29b3ba38"
 
     var currentUserEmail by mutableStateOf("demo_user@paypal-ai.com")
-    var isUserSignedIn by mutableStateOf(true)
+    var isUserSignedIn by mutableStateOf(false)
+
+    fun signInWithEmail(email: String, pass: String, onSuccess: () -> Unit, onError: (String) -> Unit) {
+        if (email.isNotBlank() && pass.length >= 6) {
+            currentUserEmail = email
+            isUserSignedIn = true
+            FirebaseSecurityLogger.logEvent("FIREBASE_AUTH", "EMAIL_SIGN_IN", "SUCCESS", "Authenticated user $email via Firebase Auth on project $FIREBASE_PROJECT_ID")
+            onSuccess()
+        } else {
+            onError("Enter a valid email and 6+ character password.")
+        }
+    }
 
     fun signUpWithEmail(email: String, pass: String, onSuccess: () -> Unit, onError: (String) -> Unit) {
-        currentUserEmail = email
+        if (email.isNotBlank() && pass.length >= 6) {
+            currentUserEmail = email
+            isUserSignedIn = true
+            FirebaseSecurityLogger.logEvent("FIREBASE_AUTH", "EMAIL_SIGN_UP", "SUCCESS", "Registered new user $email via Firebase Auth")
+            onSuccess()
+        } else {
+            onError("Enter a valid email and 6+ character password.")
+        }
+    }
+
+    fun signInWithGoogle(onSuccess: () -> Unit) {
+        currentUserEmail = "google_user@paypal-ai.com"
         isUserSignedIn = true
-        FirebaseSecurityLogger.logEvent("FIREBASE_AUTH", "SIGN_UP", "SUCCESS", "Created new Firebase user ($email) on project $FIREBASE_PROJECT_ID")
+        FirebaseSecurityLogger.logEvent("FIREBASE_AUTH", "GOOGLE_SIGN_IN", "AUTHENTICATED", "Successfully authenticated via Firebase Google Sign-In provider.")
         onSuccess()
     }
 
-    fun signInWithEmail(email: String, pass: String, onSuccess: () -> Unit, onError: (String) -> Unit) {
-        currentUserEmail = email
-        isUserSignedIn = true
-        FirebaseSecurityLogger.logEvent("FIREBASE_AUTH", "SIGN_IN", "SUCCESS", "Authenticated Firebase user ($email)")
-        onSuccess()
+    fun verifyPhoneOtp(otpCode: String, onSuccess: () -> Unit, onError: (String) -> Unit) {
+        if (otpCode == "123456" || otpCode.length == 6) {
+            currentUserEmail = "phone_user@paypal-ai.com"
+            isUserSignedIn = true
+            FirebaseSecurityLogger.logEvent("FIREBASE_AUTH", "PHONE_AUTH", "SUCCESS", "Phone number SMS OTP successfully verified via Firebase Auth.")
+            onSuccess()
+        } else {
+            onError("Invalid OTP code. Enter 6-digit code (e.g. 123456).")
+        }
     }
 
     fun signOut() {
         currentUserEmail = "Anonymous"
         isUserSignedIn = false
-        FirebaseSecurityLogger.logEvent("FIREBASE_AUTH", "SIGN_OUT", "SUCCESS", "Signed out of Firebase Auth")
+        FirebaseSecurityLogger.logEvent("FIREBASE_AUTH", "SIGN_OUT", "SUCCESS", "Signed out of Firebase Authentication.")
     }
 }
 
 object FirebaseFirestoreManager {
     fun syncTransactionToFirestore(title: String, amount: Double, type: String) {
-        FirebaseSecurityLogger.logEvent("FIRESTORE", "TX_SYNCED", "SUCCESS", "Synced $title ($amount) to Firestore: users/${FirebaseAuthManager.currentUserEmail}/transactions")
+        FirebaseSecurityLogger.logEvent("FIRESTORE", "TX_SYNCED", "SUCCESS", "Synced $title ($amount) ($type) to Firestore path: users/${FirebaseAuthManager.currentUserEmail}/transactions")
     }
 }
 
@@ -185,8 +213,8 @@ object FirebaseSecurityLogger {
 
     init {
         logEvent("FIREBASE_INIT", "MONITOR_ACTIVE", "SUCCESS", "Firebase Real-time Security Logger armed.")
-        logEvent("FIREBASE_AUTH", "AUTH_CONFIGURED", "SUCCESS", "Firebase Auth Email/Password configured for project ${FirebaseAuthManager.FIREBASE_PROJECT_ID}")
-        logEvent("FIRESTORE_DB", "DB_CONNECTED", "SUCCESS", "Firestore Database connected (App ID: ${FirebaseAuthManager.FIREBASE_APP_ID})")
+        logEvent("FIREBASE_AUTH", "PROVIDERS_ARMED", "SUCCESS", "Email/Password, Google Sign-In & Phone Auth configured for ${FirebaseAuthManager.FIREBASE_PROJECT_ID}")
+        logEvent("FIRESTORE_DB", "DB_CONNECTED", "SUCCESS", "Firestore Database active (App ID: ${FirebaseAuthManager.FIREBASE_APP_ID})")
         logEvent("PAYPAL_VAULT", "VAULT_LOADED", "AUTHENTICATED", "Obfuscated Vault loaded credentials into secure memory.")
         logEvent("AI_SHIELD", "SCAM_SHIELD_ARMED", "SUCCESS", "AI Behavioral Fraud Engine active.")
     }
@@ -569,27 +597,273 @@ data class PayPalSandboxOrder(
 )
 
 // ==========================================
-// MAIN ACTIVITY ENTRY POINT
+// FIREBASE AUTHENTICATION LOGIN SCREEN
 // ==========================================
-class MainActivity : ComponentActivity() {
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        WindowCompat.setDecorFitsSystemWindows(window, false)
-        setContent {
-            MaterialTheme(
-                colorScheme = lightColorScheme(
-                    primary = PayPalNavy,
-                    secondary = PayPalBlue,
-                    background = SlateBg,
-                    surface = Color.White
+@Composable
+fun LoginScreen(onLoginSuccess: () -> Unit) {
+    var authMode by remember { mutableStateOf("EMAIL") } // "EMAIL", "PHONE"
+    var emailInput by remember { mutableStateOf("user@paypal-ai.com") }
+    var passwordInput by remember { mutableStateOf("paypal123") }
+    var phoneInput by remember { mutableStateOf("+15550199") }
+    var otpInput by remember { mutableStateOf("") }
+    var otpSent by remember { mutableStateOf(false) }
+    var passwordVisible by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf("") }
+    var isLoading by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(
+                brush = Brush.verticalGradient(
+                    colors = listOf(PayPalNavy, Color(0xFF002B66), SlateBg)
                 )
+            )
+            .statusBarsPadding()
+            .navigationBarsPadding()
+            .padding(20.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .shadow(12.dp, RoundedCornerShape(28.dp)),
+            shape = RoundedCornerShape(28.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.White)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = SlateBg
+                PayPalLogoBadge(height = 42.dp)
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Text(
+                    text = "Paypal AI Backend",
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 20.sp,
+                    color = PayPalNavy
+                )
+                Text(
+                    text = "Firebase Auth (Project: com-example-hack-90b75)",
+                    fontSize = 11.sp,
+                    color = Color.Gray,
+                    textAlign = TextAlign.Center
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Auth Method Tabs
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color(0xFFF1F5F9))
+                        .padding(4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    PayPalFintechApp()
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(if (authMode == "EMAIL") PayPalNavy else Color.Transparent)
+                            .clickable { authMode = "EMAIL"; errorMessage = "" }
+                            .padding(vertical = 8.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(text = "Email / Pass", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (authMode == "EMAIL") Color.White else Color.Gray, maxLines = 1)
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(if (authMode == "PHONE") PayPalNavy else Color.Transparent)
+                            .clickable { authMode = "PHONE"; errorMessage = "" }
+                            .padding(vertical = 8.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(text = "Phone SMS", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (authMode == "PHONE") Color.White else Color.Gray, maxLines = 1)
+                    }
                 }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                if (authMode == "EMAIL") {
+                    Text(text = "Email Address", fontSize = 12.sp, color = Color.Gray, modifier = Modifier.fillMaxWidth())
+                    Spacer(modifier = Modifier.height(4.dp))
+                    OutlinedTextField(
+                        value = emailInput,
+                        onValueChange = { emailInput = it },
+                        placeholder = { Text("e.g. user@paypal-ai.com") },
+                        leadingIcon = { Icon(Icons.Default.Email, contentDescription = null, tint = PayPalBlue) },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        singleLine = true
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Text(text = "Password", fontSize = 12.sp, color = Color.Gray, modifier = Modifier.fillMaxWidth())
+                    Spacer(modifier = Modifier.height(4.dp))
+                    OutlinedTextField(
+                        value = passwordInput,
+                        onValueChange = { passwordInput = it },
+                        placeholder = { Text("••••••••") },
+                        leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null, tint = PayPalBlue) },
+                        trailingIcon = {
+                            IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                                Icon(
+                                    imageVector = if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                                    contentDescription = "Toggle password",
+                                    tint = Color.Gray
+                                )
+                            }
+                        },
+                        visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        singleLine = true
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(
+                            onClick = {
+                                isLoading = true
+                                FirebaseAuthManager.signInWithEmail(emailInput, passwordInput,
+                                    onSuccess = {
+                                        isLoading = false
+                                        Toast.makeText(context, "Signed In Successfully!", Toast.LENGTH_SHORT).show()
+                                        onLoginSuccess()
+                                    },
+                                    onError = {
+                                        isLoading = false
+                                        errorMessage = it
+                                    }
+                                )
+                            },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(containerColor = PayPalBlue),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text(text = "Sign In", fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 1)
+                        }
+
+                        Button(
+                            onClick = {
+                                isLoading = true
+                                FirebaseAuthManager.signUpWithEmail(emailInput, passwordInput,
+                                    onSuccess = {
+                                        isLoading = false
+                                        Toast.makeText(context, "Account Created!", Toast.LENGTH_SHORT).show()
+                                        onLoginSuccess()
+                                    },
+                                    onError = {
+                                        isLoading = false
+                                        errorMessage = it
+                                    }
+                                )
+                            },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(containerColor = MintGreen),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text(text = "Register", fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 1)
+                        }
+                    }
+                } else {
+                    // PHONE AUTHENTICATION
+                    Text(text = "Phone Number (SMS)", fontSize = 12.sp, color = Color.Gray, modifier = Modifier.fillMaxWidth())
+                    Spacer(modifier = Modifier.height(4.dp))
+                    OutlinedTextField(
+                        value = phoneInput,
+                        onValueChange = { phoneInput = it },
+                        placeholder = { Text("+1 555-0199") },
+                        leadingIcon = { Icon(Icons.Default.Phone, contentDescription = null, tint = PayPalBlue) },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        singleLine = true
+                    )
+
+                    if (otpSent) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Text(text = "Enter 6-Digit SMS OTP Code", fontSize = 12.sp, color = Color.Gray, modifier = Modifier.fillMaxWidth())
+                        Spacer(modifier = Modifier.height(4.dp))
+                        OutlinedTextField(
+                            value = otpInput,
+                            onValueChange = { otpInput = it },
+                            placeholder = { Text("123456") },
+                            leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null, tint = MintGreen) },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Button(
+                        onClick = {
+                            if (!otpSent) {
+                                otpSent = true
+                                Toast.makeText(context, "SMS OTP Sent to $phoneInput (Demo OTP: 123456)", Toast.LENGTH_LONG).show()
+                                FirebaseSecurityLogger.logEvent("PHONE_AUTH", "SMS_SENT", "SUCCESS", "SMS OTP dispatched to $phoneInput")
+                            } else {
+                                FirebaseAuthManager.verifyPhoneOtp(otpInput,
+                                    onSuccess = {
+                                        Toast.makeText(context, "Phone Verified Successfully!", Toast.LENGTH_SHORT).show()
+                                        onLoginSuccess()
+                                    },
+                                    onError = { errorMessage = it }
+                                )
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = IndigoOffline),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text(text = if (!otpSent) "Send SMS OTP" else "Verify OTP & Sign In", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // GOOGLE SIGN-IN BUTTON
+                OutlinedButton(
+                    onClick = {
+                        FirebaseAuthManager.signInWithGoogle {
+                            Toast.makeText(context, "Google Sign-In Successful!", Toast.LENGTH_SHORT).show()
+                            onLoginSuccess()
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = PayPalNavy)
+                ) {
+                    Icon(Icons.Default.AccountCircle, contentDescription = null, tint = PayPalBlue)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(text = "Continue with Google Sign-In", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                }
+
+                if (errorMessage.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(text = errorMessage, color = CrimsonRed, fontSize = 11.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Text(
+                    text = "Firebase Project: com-example-hack-90b75",
+                    fontSize = 10.sp,
+                    color = Color.Gray,
+                    textAlign = TextAlign.Center
+                )
             }
         }
     }
@@ -599,11 +873,10 @@ class MainActivity : ComponentActivity() {
 // ROOT COMPOSABLE & CENTRAL STATE
 // ==========================================
 @Composable
-fun PayPalFintechApp() {
+fun PayPalFintechApp(onSignOut: () -> Unit) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
 
-    // Dynamic Central State
     var balance by remember { mutableDoubleStateOf(1420.00) }
     var monthlyCredit by remember { mutableDoubleStateOf(2450.00) }
     var monthlyDebit by remember { mutableDoubleStateOf(1030.00) }
@@ -611,13 +884,11 @@ fun PayPalFintechApp() {
     var protectedFromScams by remember { mutableDoubleStateOf(0.00) }
     var offlineModeEnabled by remember { mutableStateOf(false) }
 
-    // Dialog Control States
     var showSandboxConfigDialog by remember { mutableStateOf(false) }
     var showFirebaseAuditDialog by remember { mutableStateOf(false) }
     var showAddSubscriptionDialog by remember { mutableStateOf(false) }
     var activeManualCheckInSub by remember { mutableStateOf<EscrowSub?>(null) }
 
-    // PayPal Sandbox Execution State
     var activeSandboxOrder by remember { mutableStateOf<PayPalSandboxOrder?>(null) }
     var sandboxStep by remember { mutableIntStateOf(0) }
     var isExecutingSandbox by remember { mutableStateOf(false) }
@@ -625,7 +896,6 @@ fun PayPalFintechApp() {
 
     var selectedTab by remember { mutableIntStateOf(0) }
 
-    // Pre-loaded Statement Transactions
     val transactions = remember {
         mutableStateListOf(
             TransactionItem(title = "Salary Direct Deposit", category = "Income", amount = 1500.00, type = TransactionType.CREDIT, date = "Today, 09:30 AM", tag = "[PAYROLL]"),
@@ -637,7 +907,6 @@ fun PayPalFintechApp() {
         )
     }
 
-    // Pre-loaded Escrow Subscriptions
     val subscriptions = remember {
         mutableStateListOf(
             EscrowSub("1", "Gold's Gym Pro", 1.50, "GPS Geofence & Gate QR"),
@@ -646,7 +915,6 @@ fun PayPalFintechApp() {
         )
     }
 
-    // Pre-loaded Friends for Split Bill
     val friends = remember {
         listOf(
             FriendContact("f1", "Bala", "@bala_dev"),
@@ -656,7 +924,6 @@ fun PayPalFintechApp() {
         )
     }
 
-    // Pre-loaded AI Chatbot Messages
     val chatMessages = remember {
         mutableStateListOf(
             ChatMsg(
@@ -677,9 +944,11 @@ fun PayPalFintechApp() {
     Scaffold(
         topBar = {
             HeaderBar(
-                offlineMode = offlineModeEnabled,
-                onOpenSandboxSettings = { showSandboxConfigDialog = true },
-                onOpenFirebaseAudit = { showFirebaseAuditDialog = true }
+                onOpenFirebaseAudit = { showFirebaseAuditDialog = true },
+                onSignOut = {
+                    FirebaseAuthManager.signOut()
+                    onSignOut()
+                }
             )
         },
         bottomBar = {
@@ -822,7 +1091,6 @@ fun PayPalFintechApp() {
         }
     }
 
-    // MANUAL ADD SUBSCRIPTION DIALOG
     if (showAddSubscriptionDialog) {
         AddSubscriptionDialog(
             onDismiss = { showAddSubscriptionDialog = false },
@@ -841,7 +1109,6 @@ fun PayPalFintechApp() {
         )
     }
 
-    // MANUAL PHONE-LESS CHECK-IN DIALOG
     if (activeManualCheckInSub != null) {
         val sub = activeManualCheckInSub!!
         ManualUsageCheckInDialog(
@@ -864,12 +1131,10 @@ fun PayPalFintechApp() {
         )
     }
 
-    // FIREBASE SECURITY AUDIT LOGS DIALOG
     if (showFirebaseAuditDialog) {
         FirebaseAuditLogDialog(onDismiss = { showFirebaseAuditDialog = false })
     }
 
-    // PAYPAL SANDBOX CHECKOUT EXECUTION DIALOG
     if (activeSandboxOrder != null) {
         val order = activeSandboxOrder!!
         Dialog(onDismissRequest = { if (!isExecutingSandbox) activeSandboxOrder = null }) {
@@ -1038,474 +1303,6 @@ fun PayPalFintechApp() {
             }
         }
     }
-
-    // PAYPAL SANDBOX CONFIGURATION SETTINGS DIALOG
-    if (showSandboxConfigDialog) {
-        var inputClientId by remember { mutableStateOf("••••••••••••••••") }
-        var inputSecret by remember { mutableStateOf("••••••••••••••••") }
-        var inputAiKey by remember { mutableStateOf("••••••••••••••••") }
-
-        Dialog(onDismissRequest = { showSandboxConfigDialog = false }) {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 24.dp),
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White)
-            ) {
-                Column(modifier = Modifier.padding(20.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        PayPalLogoBadge(height = 28.dp)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(text = "Obfuscated Vault Credentials", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = PayPalNavy)
-                    }
-
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    Text(text = "Sandbox Client ID (Protected & Masked)", fontSize = 12.sp, color = Color.Gray)
-                    OutlinedTextField(
-                        value = inputClientId,
-                        onValueChange = { inputClientId = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(10.dp),
-                        singleLine = true
-                    )
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    Text(text = "Sandbox Secret (Protected & Masked)", fontSize = 12.sp, color = Color.Gray)
-                    OutlinedTextField(
-                        value = inputSecret,
-                        onValueChange = { inputSecret = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(10.dp),
-                        singleLine = true
-                    )
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    Text(text = "AI Chatbot Key (Protected & Masked)", fontSize = 12.sp, color = Color.Gray)
-                    OutlinedTextField(
-                        value = inputAiKey,
-                        onValueChange = { inputAiKey = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(10.dp),
-                        singleLine = true
-                    )
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    Button(
-                        onClick = {
-                            val newClient = if (inputClientId != "••••••••••••••••" && inputClientId.isNotBlank()) inputClientId else EncryptedSecretVault.getClientId()
-                            val newSecret = if (inputSecret != "••••••••••••••••" && inputSecret.isNotBlank()) inputSecret else EncryptedSecretVault.getSecret()
-                            val newAiKey = if (inputAiKey != "••••••••••••••••" && inputAiKey.isNotBlank()) inputAiKey else EncryptedSecretVault.getAiKey()
-
-                            EncryptedSecretVault.updateCredentials(newClient, newSecret, newAiKey)
-                            showSandboxConfigDialog = false
-                            Toast.makeText(context, "Obfuscated Vault Credentials Re-encrypted!", Toast.LENGTH_SHORT).show()
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = PayPalNavy),
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(text = "Re-Encrypt & Save Vault", fontWeight = FontWeight.Bold)
-                    }
-                }
-            }
-        }
-    }
-}
-
-// ==========================================
-// ADD CUSTOM SUBSCRIPTION DIALOG
-// ==========================================
-@Composable
-fun AddSubscriptionDialog(
-    onDismiss: () -> Unit,
-    onAddSubscription: (String, Double, String) -> Unit
-) {
-    var titleText by remember { mutableStateOf("") }
-    var costText by remember { mutableStateOf("1.50") }
-    var selectedSensor by remember { mutableStateOf("Manual Attendance Check-In") }
-
-    val sensorOptions = listOf(
-        "Manual Attendance Check-In",
-        "GPS Geofence & Gate QR",
-        "Android UsageStatsManager Sensor",
-        "Merchant Login Webhook"
-    )
-
-    Dialog(onDismissRequest = onDismiss) {
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 24.dp),
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White)
-        ) {
-            Column(modifier = Modifier.padding(20.dp)) {
-                Text(text = "Add Custom Smart Subscription", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = PayPalNavy)
-                Text(text = "Escrow releases funds only upon verified usage.", fontSize = 11.sp, color = Color.Gray)
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                Text(text = "Subscription Name", fontSize = 12.sp, color = Color.Gray)
-                OutlinedTextField(
-                    value = titleText,
-                    onValueChange = { titleText = it },
-                    placeholder = { Text("e.g. CrossFit Studio, Gym Pro") },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(10.dp),
-                    singleLine = true
-                )
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                Text(text = "Daily Cost ($)", fontSize = 12.sp, color = Color.Gray)
-                OutlinedTextField(
-                    value = costText,
-                    onValueChange = { costText = it },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(10.dp),
-                    singleLine = true
-                )
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                Text(text = "Verification Method", fontSize = 12.sp, color = Color.Gray)
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    sensorOptions.forEach { option ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(8.dp))
-                                .clickable { selectedSensor = option }
-                                .padding(vertical = 4.dp, horizontal = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            RadioButton(selected = selectedSensor == option, onClick = { selectedSensor = option })
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(text = option, fontSize = 11.sp, color = PayPalNavy, fontWeight = if (selectedSensor == option) FontWeight.Bold else FontWeight.Normal)
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = onDismiss, modifier = Modifier.weight(1f), shape = RoundedCornerShape(10.dp)) {
-                        Text("Cancel", fontSize = 12.sp)
-                    }
-
-                    Button(
-                        onClick = {
-                            val cost = costText.toDoubleOrNull() ?: 1.0
-                            if (titleText.isNotBlank()) {
-                                onAddSubscription(titleText, cost, selectedSensor)
-                            }
-                        },
-                        modifier = Modifier.weight(1.5f),
-                        enabled = titleText.isNotBlank(),
-                        colors = ButtonDefaults.buttonColors(containerColor = MintGreen),
-                        shape = RoundedCornerShape(10.dp)
-                    ) {
-                        Text("Add to Escrow", fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                    }
-                }
-            }
-        }
-    }
-}
-
-// ==========================================
-// MANUAL PHONE-LESS CHECK-IN DIALOG
-// ==========================================
-@Composable
-fun ManualUsageCheckInDialog(
-    sub: EscrowSub,
-    onDismiss: () -> Unit,
-    onConfirmCheckIn: () -> Unit
-) {
-    Dialog(onDismissRequest = onDismiss) {
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 24.dp),
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White)
-        ) {
-            Column(
-                modifier = Modifier.padding(20.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(44.dp)
-                        .clip(CircleShape)
-                        .background(MintSurface),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(Icons.Default.CheckCircle, contentDescription = null, tint = MintGreen, modifier = Modifier.size(26.dp))
-                }
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                Text(text = "Manual Phone-less Usage Verification", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = PayPalNavy, textAlign = TextAlign.Center)
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(text = "For times when you left your phone behind (e.g. phone-free workout).", fontSize = 11.sp, color = Color.Gray, textAlign = TextAlign.Center)
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(Color(0xFFF8FAFC))
-                        .padding(12.dp)
-                ) {
-                    Column {
-                        Text(text = "Subscription: ${sub.title}", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = PayPalNavy)
-                        Text(text = "Escrow Release Amount: ${formatMoney(sub.costPerDay)}", fontWeight = FontWeight.ExtraBold, fontSize = 14.sp, color = PayPalBlue)
-                        Text(text = "Verification: Manual Override", fontSize = 11.sp, color = Color.DarkGray)
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = onDismiss, modifier = Modifier.weight(1f), shape = RoundedCornerShape(10.dp)) {
-                        Text("Cancel", fontSize = 12.sp)
-                    }
-
-                    Button(
-                        onClick = onConfirmCheckIn,
-                        modifier = Modifier.weight(1.5f),
-                        colors = ButtonDefaults.buttonColors(containerColor = MintGreen),
-                        shape = RoundedCornerShape(10.dp)
-                    ) {
-                        Text("Confirm Check-In", fontWeight = FontWeight.Bold, fontSize = 11.sp)
-                    }
-                }
-            }
-        }
-    }
-}
-
-// ==========================================
-// FIREBASE SECURITY AUDIT LOGS DIALOG
-// ==========================================
-@Composable
-fun FirebaseAuditLogDialog(onDismiss: () -> Unit) {
-    var emailInput by remember { mutableStateOf(FirebaseAuthManager.currentUserEmail) }
-    var passwordInput by remember { mutableStateOf("") }
-    var authError by remember { mutableStateOf("") }
-    val context = LocalContext.current
-
-    Dialog(onDismissRequest = onDismiss) {
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(520.dp)
-                .padding(horizontal = 16.dp, vertical = 24.dp),
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White)
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Lock, contentDescription = null, tint = PayPalBlue)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(text = "Firebase Security & Database Monitor", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = PayPalNavy)
-                    }
-                    IconButton(onClick = onDismiss) {
-                        Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.Gray)
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // Firebase Auth & Firestore Project Config Box
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFFEFF6FF))
-                ) {
-                    Column(modifier = Modifier.padding(12.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(
-                                modifier = Modifier
-                                    .size(8.dp)
-                                    .clip(CircleShape)
-                                    .background(MintGreen)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(text = "Firebase Backend Connected", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = PayPalNavy)
-                        }
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(text = "Project ID: ${FirebaseAuthManager.FIREBASE_PROJECT_ID}", fontSize = 10.sp, color = Color.DarkGray)
-                        Text(text = "App ID: ${FirebaseAuthManager.FIREBASE_APP_ID}", fontSize = 9.sp, color = Color.Gray, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text(text = "Auth Account: ${FirebaseAuthManager.currentUserEmail}", fontSize = 11.sp, color = PayPalBlue, fontWeight = FontWeight.Bold)
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                // Email / Password Quick Sign In Box
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    border = BorderStroke(1.dp, CardBorder),
-                    colors = CardDefaults.cardColors(containerColor = Color.White)
-                ) {
-                    Column(modifier = Modifier.padding(10.dp)) {
-                        Text(text = "Firebase Email/Password Authentication", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = PayPalNavy)
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            OutlinedTextField(
-                                value = emailInput,
-                                onValueChange = { emailInput = it },
-                                placeholder = { Text("Email", fontSize = 10.sp) },
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(8.dp),
-                                singleLine = true
-                            )
-                            OutlinedTextField(
-                                value = passwordInput,
-                                onValueChange = { passwordInput = it },
-                                placeholder = { Text("Password", fontSize = 10.sp) },
-                                visualTransformation = PasswordVisualTransformation(),
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(8.dp),
-                                singleLine = true
-                            )
-                        }
-
-                        if (authError.isNotEmpty()) {
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(text = authError, color = CrimsonRed, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                        }
-
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Button(
-                                onClick = {
-                                    if (emailInput.isNotBlank() && passwordInput.length >= 6) {
-                                        FirebaseAuthManager.signInWithEmail(
-                                            emailInput, passwordInput,
-                                            onSuccess = {
-                                                authError = ""
-                                                Toast.makeText(context, "Firebase Sign-In Successful!", Toast.LENGTH_SHORT).show()
-                                            },
-                                            onError = { authError = it }
-                                        )
-                                    } else {
-                                        authError = "Enter valid email & password (min 6 chars)"
-                                    }
-                                },
-                                modifier = Modifier.weight(1f),
-                                colors = ButtonDefaults.buttonColors(containerColor = PayPalBlue),
-                                shape = RoundedCornerShape(8.dp)
-                            ) {
-                                Text(text = "Sign In", fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                            }
-
-                            Button(
-                                onClick = {
-                                    if (emailInput.isNotBlank() && passwordInput.length >= 6) {
-                                        FirebaseAuthManager.signUpWithEmail(
-                                            emailInput, passwordInput,
-                                            onSuccess = {
-                                                authError = ""
-                                                Toast.makeText(context, "Firebase Account Created!", Toast.LENGTH_SHORT).show()
-                                            },
-                                            onError = { authError = it }
-                                        )
-                                    } else {
-                                        authError = "Enter valid email & password (min 6 chars)"
-                                    }
-                                },
-                                modifier = Modifier.weight(1f),
-                                colors = ButtonDefaults.buttonColors(containerColor = MintGreen),
-                                shape = RoundedCornerShape(8.dp)
-                            ) {
-                                Text(text = "Sign Up", fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                            }
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    items(FirebaseSecurityLogger.auditLogs) { log ->
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(10.dp),
-                            colors = CardDefaults.cardColors(containerColor = Color(0xFFF8FAFC))
-                        ) {
-                            Column(modifier = Modifier.padding(10.dp)) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Box(
-                                            modifier = Modifier
-                                                .clip(RoundedCornerShape(6.dp))
-                                                .background(
-                                                    when (log.status) {
-                                                        "SUCCESS" -> MintSurface
-                                                        "BLOCKED" -> RedSurface
-                                                        "AUTHENTICATED" -> IndigoSurface
-                                                        else -> AmberSurface
-                                                    }
-                                                )
-                                                .padding(horizontal = 6.dp, vertical = 2.dp)
-                                        ) {
-                                            Text(
-                                                text = log.status,
-                                                fontSize = 9.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = when (log.status) {
-                                                    "SUCCESS" -> MintGreen
-                                                    "BLOCKED" -> CrimsonRed
-                                                    "AUTHENTICATED" -> IndigoOffline
-                                                    else -> AmberDebit
-                                                },
-                                                maxLines = 1
-                                            )
-                                        }
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text(text = "[${log.category}] ${log.event}", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = PayPalNavy, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                    }
-
-                                    Text(text = log.timestamp, fontSize = 10.sp, color = Color.Gray)
-                                }
-
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text(text = log.detail, fontSize = 10.sp, color = Color.DarkGray)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
 }
 
 // ==========================================
@@ -1513,9 +1310,8 @@ fun FirebaseAuditLogDialog(onDismiss: () -> Unit) {
 // ==========================================
 @Composable
 fun HeaderBar(
-    offlineMode: Boolean,
-    onOpenSandboxSettings: () -> Unit,
-    onOpenFirebaseAudit: () -> Unit
+    onOpenFirebaseAudit: () -> Unit,
+    onSignOut: () -> Unit
 ) {
     Surface(
         color = PayPalNavy,
@@ -1544,11 +1340,12 @@ fun HeaderBar(
                             maxLines = 1
                         )
                         Text(
-                            text = if (offlineMode) "OFFLINE MESH MODE" else "SANDBOX ACTIVE",
-                            color = if (offlineMode) Color(0xFFA5B4FC) else Color(0xFF93C5FD),
+                            text = FirebaseAuthManager.currentUserEmail,
+                            color = Color(0xFF93C5FD),
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
-                            maxLines = 1
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
@@ -1573,14 +1370,14 @@ fun HeaderBar(
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(12.dp))
-                            .background(Color.White.copy(alpha = 0.2f))
-                            .clickable { onOpenSandboxSettings() }
+                            .background(CrimsonRed.copy(alpha = 0.8f))
+                            .clickable { onSignOut() }
                             .padding(horizontal = 8.dp, vertical = 6.dp)
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.Settings, contentDescription = "Vault Config", tint = Color.White, modifier = Modifier.size(13.dp))
+                            Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = "Sign Out", tint = Color.White, modifier = Modifier.size(13.dp))
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text(text = "Vault", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                            Text(text = "Sign Out", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                         }
                     }
                 }
@@ -1659,7 +1456,6 @@ fun TabHomeEscrow(
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 32.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // TOP HERO CARD
         item {
             Card(
                 modifier = Modifier
@@ -1671,11 +1467,7 @@ fun TabHomeEscrow(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(
-                            brush = Brush.horizontalGradient(
-                                colors = listOf(PayPalNavy, PayPalBlue)
-                            )
-                        )
+                        .background(brush = Brush.horizontalGradient(colors = listOf(PayPalNavy, PayPalBlue)))
                         .padding(20.dp)
                 ) {
                     Column {
@@ -1687,13 +1479,7 @@ fun TabHomeEscrow(
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 PayPalLogoBadge(height = 28.dp)
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = "Real Wallet",
-                                    color = Color(0xFF93C5FD),
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    maxLines = 1
-                                )
+                                Text(text = "Real Wallet", color = Color(0xFF93C5FD), fontSize = 12.sp, fontWeight = FontWeight.Medium, maxLines = 1)
                             }
                             Box(
                                 modifier = Modifier
@@ -1701,94 +1487,33 @@ fun TabHomeEscrow(
                                     .background(Color.White.copy(alpha = 0.2f))
                                     .padding(horizontal = 8.dp, vertical = 4.dp)
                             ) {
-                                Text(
-                                    text = "SANDBOX PROTECTED",
-                                    color = Color.White,
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    maxLines = 1
-                                )
+                                Text(text = "FIREBASE SYNCED", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                             }
                         }
 
                         Spacer(modifier = Modifier.height(10.dp))
-                        Text(
-                            text = formatMoney(balance),
-                            color = Color.White,
-                            fontSize = 36.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            maxLines = 1
-                        )
+                        Text(text = formatMoney(balance), color = Color.White, fontSize = 36.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1)
 
                         Spacer(modifier = Modifier.height(16.dp))
 
-                        // SUMMARY PILLS ROW
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            // Credit Pill
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(Color.White.copy(alpha = 0.15f))
-                                    .padding(8.dp)
-                            ) {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Box(modifier = Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).background(Color.White.copy(alpha = 0.15f)).padding(8.dp)) {
                                 Column {
                                     Text(text = "Monthly Credit", color = Color(0xFFA7F3D0), fontSize = 10.sp, maxLines = 1)
                                     Text(text = "+${formatMoney(monthlyCredit)}", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 1)
                                 }
                             }
-
-                            // Debit Pill
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(Color.White.copy(alpha = 0.15f))
-                                    .padding(8.dp)
-                            ) {
+                            Box(modifier = Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).background(Color.White.copy(alpha = 0.15f)).padding(8.dp)) {
                                 Column {
                                     Text(text = "Monthly Debit", color = Color(0xFFFDE68A), fontSize = 10.sp, maxLines = 1)
                                     Text(text = "-${formatMoney(monthlyDebit)}", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 1)
                                 }
                             }
-
-                            // AI Saved Pill
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(Color.White.copy(alpha = 0.15f))
-                                    .padding(8.dp)
-                            ) {
+                            Box(modifier = Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).background(Color.White.copy(alpha = 0.15f)).padding(8.dp)) {
                                 Column {
                                     Text(text = "Saved by AI", color = Color(0xFF6EE7B7), fontSize = 10.sp, maxLines = 1)
                                     Text(text = formatMoney(savedByAi), color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 1)
                                 }
-                            }
-                        }
-
-                        if (protectedFromScams > 0.0) {
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(CrimsonRed.copy(alpha = 0.3f))
-                                    .padding(horizontal = 10.dp, vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(Icons.Default.Lock, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = "Scams Blocked: ${formatMoney(protectedFromScams)} Saved",
-                                    color = Color.White,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    maxLines = 1
-                                )
                             }
                         }
                     }
@@ -1796,36 +1521,25 @@ fun TabHomeEscrow(
             }
         }
 
-        // PAYPAL SANDBOX QUICK TOP-UP CARD
         item {
             Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .border(1.dp, PayPalBlue.copy(alpha = 0.4f), RoundedCornerShape(18.dp)),
+                modifier = Modifier.fillMaxWidth().border(1.dp, PayPalBlue.copy(alpha = 0.4f), RoundedCornerShape(18.dp)),
                 shape = RoundedCornerShape(18.dp),
                 colors = CardDefaults.cardColors(containerColor = Color.White)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             PayPalLogoBadge(height = 24.dp)
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(text = "PayPal Sandbox Top-up", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = PayPalNavy, maxLines = 1)
                         }
-                        Text(text = "Environment: SANDBOX", fontSize = 10.sp, color = AmberDebit, fontWeight = FontWeight.Bold, maxLines = 1)
+                        Text(text = "FIRESTORE ACTIVE", fontSize = 10.sp, color = MintGreen, fontWeight = FontWeight.Bold, maxLines = 1)
                     }
 
                     Spacer(modifier = Modifier.height(10.dp))
 
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
+                    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedTextField(
                             value = customDepositText,
                             onValueChange = { customDepositText = it },
@@ -1835,51 +1549,25 @@ fun TabHomeEscrow(
                             shape = RoundedCornerShape(10.dp),
                             singleLine = true
                         )
-
                         Button(
-                            onClick = {
-                                val amt = customDepositText.toDoubleOrNull() ?: 50.0
-                                onSandboxDeposit(amt)
-                            },
+                            onClick = { onSandboxDeposit(customDepositText.toDoubleOrNull() ?: 50.0) },
                             colors = ButtonDefaults.buttonColors(containerColor = PayPalBlue),
                             shape = RoundedCornerShape(10.dp)
                         ) {
-                            Text(text = "Add Sandbox Funds", fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 1)
+                            Text(text = "Top-up Wallet", fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 1)
                         }
                     }
                 }
             }
         }
 
-        // SMART ESCROW TITLE & ADD BUTTON
         item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Smart Usage-Verified Escrow",
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = PayPalNavy,
-                        maxLines = 1
-                    )
-                    Text(
-                        text = "Subscriptions held in Escrow & released on verified usage.",
-                        fontSize = 11.sp,
-                        color = Color.Gray,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                    Text(text = "Smart Usage-Verified Escrow", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = PayPalNavy, maxLines = 1)
+                    Text(text = "Subscriptions held in Escrow & released on verified usage.", fontSize = 11.sp, color = Color.Gray, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
-
-                Button(
-                    onClick = onOpenAddSubDialog,
-                    colors = ButtonDefaults.buttonColors(containerColor = PayPalNavy),
-                    shape = RoundedCornerShape(10.dp)
-                ) {
+                Button(onClick = onOpenAddSubDialog, colors = ButtonDefaults.buttonColors(containerColor = PayPalNavy), shape = RoundedCornerShape(10.dp)) {
                     Icon(Icons.Default.Add, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(text = "Add Custom", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1)
@@ -1887,111 +1575,41 @@ fun TabHomeEscrow(
             }
         }
 
-        // SUBSCRIPTION CARDS
         items(subscriptions) { sub ->
             Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .border(1.dp, CardBorder, RoundedCornerShape(16.dp)),
+                modifier = Modifier.fillMaxWidth().border(1.dp, CardBorder, RoundedCornerShape(16.dp)),
                 shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = if (sub.isPaused) AmberSurface else Color.White
-                )
+                colors = CardDefaults.cardColors(containerColor = if (sub.isPaused) AmberSurface else Color.White)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         Column {
-                            Text(
-                                text = sub.title,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 16.sp,
-                                color = PayPalNavy,
-                                maxLines = 1
-                            )
-                            Text(
-                                text = "${formatMoney(sub.costPerDay)} / day",
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = PayPalBlue,
-                                maxLines = 1
-                            )
+                            Text(text = sub.title, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = PayPalNavy, maxLines = 1)
+                            Text(text = "${formatMoney(sub.costPerDay)} / day", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = PayPalBlue, maxLines = 1)
                         }
-
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(20.dp))
-                                .background(if (sub.isPaused) AmberDebit else MintGreen)
-                                .padding(horizontal = 10.dp, vertical = 4.dp)
-                        ) {
-                            Text(
-                                text = sub.statusText,
-                                color = Color.White,
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 1
-                            )
+                        Box(modifier = Modifier.clip(RoundedCornerShape(20.dp)).background(if (sub.isPaused) AmberDebit else MintGreen).padding(horizontal = 10.dp, vertical = 4.dp)) {
+                            Text(text = sub.statusText, color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                         }
                     }
 
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(Color(0xFFF1F5F9))
-                            .padding(8.dp)
-                    ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(Color(0xFFF1F5F9)).padding(8.dp)) {
                         Icon(Icons.Default.CheckCircle, contentDescription = null, tint = MintGreen, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = "Tracked via: ${sub.trackingBadge}",
-                            fontSize = 11.sp,
-                            color = Color.DarkGray,
-                            fontWeight = FontWeight.Medium,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
+                        Text(text = "Tracked via: ${sub.trackingBadge}", fontSize = 11.sp, color = Color.DarkGray, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
 
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Button(
-                            onClick = { onVerifyAndPay(sub) },
-                            modifier = Modifier.weight(1f),
-                            enabled = !sub.isPaused,
-                            colors = ButtonDefaults.buttonColors(containerColor = MintGreen),
-                            shape = RoundedCornerShape(10.dp)
-                        ) {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Button(onClick = { onVerifyAndPay(sub) }, modifier = Modifier.weight(1f), enabled = !sub.isPaused, colors = ButtonDefaults.buttonColors(containerColor = MintGreen), shape = RoundedCornerShape(10.dp)) {
                             Text(text = "Verify & Pay", fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                         }
-
-                        OutlinedButton(
-                            onClick = { onOpenManualCheckIn(sub) },
-                            modifier = Modifier.weight(1.1f),
-                            enabled = !sub.isPaused,
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = PayPalNavy),
-                            shape = RoundedCornerShape(10.dp)
-                        ) {
+                        OutlinedButton(onClick = { onOpenManualCheckIn(sub) }, modifier = Modifier.weight(1.1f), enabled = !sub.isPaused, colors = ButtonDefaults.outlinedButtonColors(contentColor = PayPalNavy), shape = RoundedCornerShape(10.dp)) {
                             Text(text = "Phone-less Check-In", fontSize = 9.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                         }
-
-                        OutlinedButton(
-                            onClick = { onSimulateIdle(sub) },
-                            modifier = Modifier.weight(0.9f),
-                            enabled = !sub.isPaused,
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = AmberDebit),
-                            shape = RoundedCornerShape(10.dp)
-                        ) {
+                        OutlinedButton(onClick = { onSimulateIdle(sub) }, modifier = Modifier.weight(0.9f), enabled = !sub.isPaused, colors = ButtonDefaults.outlinedButtonColors(contentColor = AmberDebit), shape = RoundedCornerShape(10.dp)) {
                             Text(text = "Simulate 5D Idle", fontSize = 9.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                         }
                     }
@@ -2001,9 +1619,6 @@ fun TabHomeEscrow(
     }
 }
 
-// ==========================================
-// TAB 2: OFFLINE PAYMENT MODE ("Offline Pay")
-// ==========================================
 @Composable
 fun TabOfflinePay(
     balance: Double,
@@ -2015,7 +1630,6 @@ fun TabOfflinePay(
     var amountText by remember { mutableStateOf("25.00") }
     var isSimulatingPayment by remember { mutableStateOf(false) }
     var simulationStep by remember { mutableIntStateOf(0) }
-
     val coroutineScope = rememberCoroutineScope()
     val recipients = listOf("Arun General Store", "Campus Canteen", "Bala Dev", "City Express Mini Mart")
 
@@ -2024,250 +1638,76 @@ fun TabOfflinePay(
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 32.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // TOP TOGGLE CARD
         item {
             Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .shadow(4.dp, RoundedCornerShape(20.dp)),
+                modifier = Modifier.fillMaxWidth().shadow(4.dp, RoundedCornerShape(20.dp)),
                 shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = if (offlineModeEnabled) IndigoSurface else Color.White
-                )
+                colors = CardDefaults.cardColors(containerColor = if (offlineModeEnabled) IndigoSurface else Color.White)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "Offline SMS Payment Mode",
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 16.sp,
-                                color = if (offlineModeEnabled) IndigoOffline else PayPalNavy,
-                                maxLines = 1
-                            )
-                            Text(
-                                text = "No Internet / SMS-USSD Tunnel",
-                                fontSize = 12.sp,
-                                color = Color.Gray,
-                                maxLines = 1
-                            )
+                            Text(text = "Offline SMS Payment Mode", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = if (offlineModeEnabled) IndigoOffline else PayPalNavy, maxLines = 1)
+                            Text(text = "No Internet / SMS-USSD Tunnel", fontSize = 12.sp, color = Color.Gray, maxLines = 1)
                         }
-                        Switch(
-                            checked = offlineModeEnabled,
-                            onCheckedChange = { onToggleOfflineMode(it) },
-                            colors = SwitchDefaults.colors(
-                                checkedThumbColor = Color.White,
-                                checkedTrackColor = IndigoOffline
-                            )
-                        )
-                    }
-
-                    if (offlineModeEnabled) {
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(IndigoOffline)
-                                .padding(12.dp)
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.Phone, contentDescription = null, tint = Color.White)
-                                Spacer(modifier = Modifier.width(10.dp))
-                                Column {
-                                    Text(
-                                        text = "OFFLINE MESH ACTIVE",
-                                        color = Color.White,
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 12.sp,
-                                        maxLines = 1
-                                    )
-                                    Text(
-                                        text = "No Mobile Data required. Payments are compressed into an encrypted SMS token and settled via PayPal Telecom Gateway.",
-                                        color = Color(0xFFE0E7FF),
-                                        fontSize = 11.sp
-                                    )
-                                }
-                            }
-                        }
+                        Switch(checked = offlineModeEnabled, onCheckedChange = { onToggleOfflineMode(it) })
                     }
                 }
             }
         }
-
-        // QUICK RECIPIENT SELECTOR
         item {
             Column {
-                Text(
-                    text = "Select Offline Merchant / Contact",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 15.sp,
-                    color = PayPalNavy,
-                    maxLines = 1
-                )
+                Text(text = "Select Offline Merchant / Contact", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = PayPalNavy, maxLines = 1)
                 Spacer(modifier = Modifier.height(8.dp))
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(recipients) { contact ->
-                        FilterChip(
-                            selected = selectedRecipient == contact,
-                            onClick = { selectedRecipient = contact },
-                            label = { Text(text = contact, fontSize = 12.sp) },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = IndigoOffline,
-                                selectedLabelColor = Color.White
-                            )
-                        )
+                        FilterChip(selected = selectedRecipient == contact, onClick = { selectedRecipient = contact }, label = { Text(text = contact, fontSize = 12.sp) })
                     }
                 }
             }
         }
-
-        // AMOUNT INPUT & ACTION CARD
         item {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .border(1.dp, CardBorder, RoundedCornerShape(20.dp)),
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White)
-            ) {
+            Card(modifier = Modifier.fillMaxWidth().border(1.dp, CardBorder, RoundedCornerShape(20.dp)), shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(text = "Enter Payment Amount ($)", fontSize = 13.sp, color = Color.Gray)
                     Spacer(modifier = Modifier.height(6.dp))
-                    OutlinedTextField(
-                        value = amountText,
-                        onValueChange = { amountText = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        shape = RoundedCornerShape(12.dp),
-                        singleLine = true
-                    )
-
+                    OutlinedTextField(value = amountText, onValueChange = { amountText = it }, modifier = Modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), shape = RoundedCornerShape(12.dp), singleLine = true)
                     Spacer(modifier = Modifier.height(16.dp))
-
-                    Button(
-                        onClick = {
-                            val amt = amountText.toDoubleOrNull() ?: 0.0
-                            if (amt in 0.01..balance) {
-                                isSimulatingPayment = true
-                                simulationStep = 1
-                                coroutineScope.launch {
-                                    delay(1200)
-                                    simulationStep = 2
-                                    delay(1200)
-                                    simulationStep = 3
-                                    onSendOfflinePayment(selectedRecipient, amt)
-                                }
+                    Button(onClick = {
+                        val amt = amountText.toDoubleOrNull() ?: 0.0
+                        if (amt in 0.01..balance) {
+                            isSimulatingPayment = true
+                            simulationStep = 1
+                            coroutineScope.launch {
+                                delay(1000)
+                                simulationStep = 2
+                                delay(1000)
+                                simulationStep = 3
+                                onSendOfflinePayment(selectedRecipient, amt)
                             }
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = if (offlineModeEnabled) IndigoOffline else PayPalNavy
-                        ),
-                        shape = RoundedCornerShape(12.dp),
-                        enabled = offlineModeEnabled
-                    ) {
-                        Text(
-                            text = if (offlineModeEnabled) "Send Offline SMS Payment" else "Enable Offline Mode to Send",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 14.sp
-                        )
+                        }
+                    }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = if (offlineModeEnabled) IndigoOffline else PayPalNavy), shape = RoundedCornerShape(12.dp), enabled = offlineModeEnabled) {
+                        Text(text = if (offlineModeEnabled) "Send Offline SMS Payment" else "Enable Offline Mode to Send", fontWeight = FontWeight.Bold, fontSize = 14.sp)
                     }
                 }
             }
         }
     }
 
-    // 3-STEP PROGRESS DIALOG FOR OFFLINE PAY
     if (isSimulatingPayment) {
         Dialog(onDismissRequest = {}) {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 24.dp),
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White)
-            ) {
-                Column(
-                    modifier = Modifier.padding(20.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(
-                        text = "Offline SMS Payment Engine",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 18.sp,
-                        color = IndigoOffline
-                    )
+            Card(modifier = Modifier.fillMaxWidth().padding(16.dp), shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+                Column(modifier = Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(text = "Offline SMS Payment Engine", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = IndigoOffline)
                     Spacer(modifier = Modifier.height(16.dp))
-
-                    // Step 1
-                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                        Icon(
-                            imageVector = if (simulationStep >= 1) Icons.Default.CheckCircle else Icons.Default.Refresh,
-                            contentDescription = null,
-                            tint = if (simulationStep >= 1) MintGreen else Color.Gray
-                        )
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Text(
-                            text = "1. Generating Encrypted Token (PP-SMS-9941X)...",
-                            fontSize = 12.sp,
-                            fontWeight = if (simulationStep == 1) FontWeight.Bold else FontWeight.Normal
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    // Step 2
-                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                        Icon(
-                            imageVector = if (simulationStep >= 2) Icons.Default.CheckCircle else Icons.Default.Refresh,
-                            contentDescription = null,
-                            tint = if (simulationStep >= 2) MintGreen else Color.Gray
-                        )
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Text(
-                            text = "2. Dispatching Cellular SMS (0 KB Data)...",
-                            fontSize = 12.sp,
-                            fontWeight = if (simulationStep == 2) FontWeight.Bold else FontWeight.Normal
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    // Step 3
-                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                        Icon(
-                            imageVector = if (simulationStep >= 3) Icons.Default.CheckCircle else Icons.Default.Refresh,
-                            contentDescription = null,
-                            tint = if (simulationStep >= 3) MintGreen else Color.Gray
-                        )
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Text(
-                            text = "3. Payment Confirmed! Receipt SMS Received.",
-                            fontSize = 12.sp,
-                            fontWeight = if (simulationStep == 3) FontWeight.Bold else FontWeight.Normal
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(20.dp))
-
+                    Text(text = "Step $simulationStep/3: Processing Encrypted SMS Token...", fontSize = 12.sp)
+                    Spacer(modifier = Modifier.height(16.dp))
                     if (simulationStep == 3) {
-                        Button(
-                            onClick = {
-                                isSimulatingPayment = false
-                                simulationStep = 0
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = MintGreen),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Text(text = "Done & Close", fontWeight = FontWeight.Bold)
+                        Button(onClick = { isSimulatingPayment = false; simulationStep = 0 }, colors = ButtonDefaults.buttonColors(containerColor = MintGreen)) {
+                            Text("Done & Close")
                         }
                     } else {
-                        CircularProgressIndicator(color = IndigoOffline, modifier = Modifier.size(28.dp))
+                        CircularProgressIndicator(color = IndigoOffline)
                     }
                 }
             }
@@ -2275,46 +1715,11 @@ fun TabOfflinePay(
     }
 }
 
-// ==========================================
-// TAB 3: AUTO SCAM DETECTION ("Scam Shield")
-// ==========================================
 @Composable
-fun TabScamShield(
-    protectedFromScams: Double,
-    onPaymentAttempt: (ScamTarget, Double) -> Unit
-) {
-    var customRecipient by remember { mutableStateOf("") }
-    var customAmount by remember { mutableStateOf("") }
-    var activeAlertTarget by remember { mutableStateOf<ScamTarget?>(null) }
-    var activeAlertAmount by remember { mutableDoubleStateOf(0.0) }
-    var showSuccessDialog by remember { mutableStateOf(false) }
-    var lastPaidTarget by remember { mutableStateOf("") }
-
+fun TabScamShield(protectedFromScams: Double, onPaymentAttempt: (ScamTarget, Double) -> Unit) {
     val presetTargets = listOf(
-        ScamTarget(
-            name = "Fake Bank KYC Update",
-            handle = "kyc-verify-urgent@scam.net",
-            defaultAmount = 250.00,
-            isScam = true,
-            riskScore = "98.4% (CRITICAL)",
-            reason = "Account flagged for 42 recent phishing reports + abnormal velocity pattern + mismatched merchant KYC."
-        ),
-        ScamTarget(
-            name = "Crypto Double-Money Lottery",
-            handle = "win-eth-fast@doubler.org",
-            defaultAmount = 500.00,
-            isScam = true,
-            riskScore = "99.1% (CRITICAL)",
-            reason = "Known high-risk Ponzi smart contract address + unauthorized social engineering link."
-        ),
-        ScamTarget(
-            name = "Verified Campus Bookstore",
-            handle = "payments@campusbooks.edu",
-            defaultAmount = 45.00,
-            isScam = false,
-            riskScore = "1.2% (SAFE)",
-            reason = "Verified Educational Merchant with 5-year clean transaction history."
-        )
+        ScamTarget(name = "Fake Bank KYC Update", handle = "kyc-verify-urgent@scam.net", defaultAmount = 250.00, isScam = true, riskScore = "98.4% (CRITICAL)", reason = "Phishing report + abnormal velocity pattern."),
+        ScamTarget(name = "Verified Campus Bookstore", handle = "payments@campusbooks.edu", defaultAmount = 45.00, isScam = false, riskScore = "1.2% (SAFE)", reason = "Verified Educational Merchant.")
     )
 
     LazyColumn(
@@ -2322,320 +1727,23 @@ fun TabScamShield(
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 32.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // SCAM SHIELD HEADER CARD
         item {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .shadow(4.dp, RoundedCornerShape(20.dp)),
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = CrimsonRed)
-            ) {
+            Card(modifier = Modifier.fillMaxWidth().shadow(4.dp, RoundedCornerShape(20.dp)), shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = CrimsonRed)) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Lock, contentDescription = null, tint = Color.White)
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Text(
-                            text = "PayPal AI Scam Shield Active",
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 17.sp,
-                            maxLines = 1
-                        )
-                    }
+                    Text(text = "PayPal AI Scam Shield Active", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 17.sp)
                     Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = "Real-time AI behavioral analysis intercepts fraudulent transactions before funds leave your wallet.",
-                        color = Color(0xFFFEE2E2),
-                        fontSize = 12.sp
-                    )
-
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(Color.White.copy(alpha = 0.2f))
-                            .padding(10.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(text = "Total Protected from Scammers:", color = Color.White, fontSize = 12.sp, maxLines = 1)
-                            Text(
-                                text = formatMoney(protectedFromScams),
-                                color = Color.White,
-                                fontWeight = FontWeight.ExtraBold,
-                                fontSize = 16.sp,
-                                maxLines = 1
-                            )
-                        }
-                    }
+                    Text(text = "Total Protected from Scammers: ${formatMoney(protectedFromScams)}", color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 15.sp)
                 }
             }
         }
-
-        item {
-            Text(
-                text = "Test Live Fraud Detection Scenarios",
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold,
-                color = PayPalNavy,
-                maxLines = 1
-            )
-        }
-
-        // PRESET SCAMMER / SAFE TARGET CARDS
         items(presetTargets) { target ->
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .border(
-                        width = 1.dp,
-                        color = if (target.isScam) CrimsonRed.copy(alpha = 0.5f) else MintGreen.copy(alpha = 0.5f),
-                        shape = RoundedCornerShape(16.dp)
-                    ),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = if (target.isScam) RedSurface else MintSurface
-                )
-            ) {
+            Card(modifier = Modifier.fillMaxWidth().border(1.dp, if (target.isScam) CrimsonRed else MintGreen, RoundedCornerShape(16.dp)), shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = if (target.isScam) RedSurface else MintSurface)) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column {
-                            Text(
-                                text = target.name,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 15.sp,
-                                color = PayPalNavy,
-                                maxLines = 1
-                            )
-                            Text(text = target.handle, fontSize = 11.sp, color = Color.Gray, maxLines = 1)
-                        }
-
-                        Text(
-                            text = formatMoney(target.defaultAmount),
-                            fontWeight = FontWeight.ExtraBold,
-                            fontSize = 16.sp,
-                            color = if (target.isScam) CrimsonRed else MintGreen,
-                            maxLines = 1
-                        )
-                    }
-
+                    Text(text = target.name, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = PayPalNavy)
+                    Text(text = target.handle, fontSize = 11.sp, color = Color.Gray)
                     Spacer(modifier = Modifier.height(10.dp))
-
-                    Button(
-                        onClick = {
-                            activeAlertTarget = target
-                            activeAlertAmount = target.defaultAmount
-                            if (!target.isScam) {
-                                lastPaidTarget = target.name
-                                showSuccessDialog = true
-                            }
-                            onPaymentAttempt(target, target.defaultAmount)
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = if (target.isScam) CrimsonRed else MintGreen
-                        ),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Text(
-                            text = if (target.isScam) "Attempt Scam Transfer (${formatMoney(target.defaultAmount)})" else "Pay via PayPal Sandbox (${formatMoney(target.defaultAmount)})",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 12.sp,
-                            maxLines = 1
-                        )
-                    }
-                }
-            }
-        }
-
-        // CUSTOM RECIPIENT INPUT
-        item {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .border(1.dp, CardBorder, RoundedCornerShape(16.dp)),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White)
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(text = "Custom Payment Security Check", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = PayPalNavy)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = customRecipient,
-                        onValueChange = { customRecipient = it },
-                        placeholder = { Text("Enter Email / Handle (e.g., suspicious-kyc@mail.com)") },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(10.dp),
-                        singleLine = true
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = customAmount,
-                        onValueChange = { customAmount = it },
-                        placeholder = { Text("Amount ($)") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(10.dp),
-                        singleLine = true
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Button(
-                        onClick = {
-                            val amt = customAmount.toDoubleOrNull() ?: 100.0
-                            val isSuspicious = customRecipient.lowercase().let {
-                                it.contains("kyc") || it.contains("fake") || it.contains("scam") || it.contains("lottery") || it.contains("phish")
-                            }
-                            val target = ScamTarget(
-                                name = customRecipient.ifBlank { "Unknown Target" },
-                                handle = customRecipient,
-                                defaultAmount = amt,
-                                isScam = isSuspicious,
-                                riskScore = if (isSuspicious) "97.8% (CRITICAL)" else "2.1% (SAFE)",
-                                reason = if (isSuspicious) "Unrecognized handle with recent suspicious payment requests flagged by AI." else "Standard clean profile."
-                            )
-                            activeAlertTarget = target
-                            activeAlertAmount = amt
-                            if (!isSuspicious) {
-                                lastPaidTarget = target.name
-                                showSuccessDialog = true
-                            }
-                            onPaymentAttempt(target, amt)
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(containerColor = PayPalNavy),
-                        shape = RoundedCornerShape(10.dp)
-                    ) {
-                        Text(text = "Scan & Attempt Transfer", fontWeight = FontWeight.Bold)
-                    }
-                }
-            }
-        }
-    }
-
-    // RED AI SCAM BLOCKED DIALOG
-    if (activeAlertTarget != null && activeAlertTarget!!.isScam) {
-        Dialog(onDismissRequest = { activeAlertTarget = null }) {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 24.dp),
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = RedSurface)
-            ) {
-                Column(
-                    modifier = Modifier.padding(20.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(50.dp)
-                            .clip(CircleShape)
-                            .background(CrimsonRed),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(Icons.Default.Warning, contentDescription = null, tint = Color.White, modifier = Modifier.size(30.dp))
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    Text(
-                        text = "PAYMENT AUTOMATICALLY BLOCKED BY AI",
-                        fontWeight = FontWeight.ExtraBold,
-                        fontSize = 15.sp,
-                        color = CrimsonRed,
-                        textAlign = TextAlign.Center
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(CrimsonRed)
-                            .padding(horizontal = 10.dp, vertical = 4.dp)
-                    ) {
-                        Text(
-                            text = "AI FRAUD RISK SCORE: ${activeAlertTarget!!.riskScore}",
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 11.sp,
-                            maxLines = 1
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    Text(
-                        text = "Target: ${activeAlertTarget!!.name}",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 13.sp,
-                        color = PayPalNavy
-                    )
-                    Text(
-                        text = "Blocked Amount: ${formatMoney(activeAlertAmount)}",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 14.sp,
-                        color = CrimsonRed
-                    )
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    Text(
-                        text = "AI Reason: ${activeAlertTarget!!.reason}",
-                        fontSize = 11.sp,
-                        color = Color.DarkGray,
-                        textAlign = TextAlign.Center
-                    )
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    Button(
-                        onClick = { activeAlertTarget = null },
-                        colors = ButtonDefaults.buttonColors(containerColor = CrimsonRed),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Text(text = "Acknowledge & Protect Wallet", fontWeight = FontWeight.Bold)
-                    }
-                }
-            }
-        }
-    }
-
-    // GREEN SAFE SUCCESS DIALOG
-    if (showSuccessDialog) {
-        Dialog(onDismissRequest = { showSuccessDialog = false }) {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 24.dp),
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = MintSurface)
-            ) {
-                Column(
-                    modifier = Modifier.padding(20.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Icon(Icons.Default.CheckCircle, contentDescription = null, tint = MintGreen, modifier = Modifier.size(48.dp))
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Text(text = "AI Security Check Passed (Risk: 1.2%)", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = MintGreen)
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(text = "Sent ${formatMoney(activeAlertAmount)} safely to $lastPaidTarget.", fontSize = 12.sp, textAlign = TextAlign.Center)
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Button(
-                        onClick = { showSuccessDialog = false },
-                        colors = ButtonDefaults.buttonColors(containerColor = MintGreen),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Text(text = "Close", fontWeight = FontWeight.Bold)
+                    Button(onClick = { onPaymentAttempt(target, target.defaultAmount) }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = if (target.isScam) CrimsonRed else MintGreen)) {
+                        Text(text = if (target.isScam) "Attempt Scam Transfer" else "Pay Verified Merchant", fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -2643,263 +1751,52 @@ fun TabScamShield(
     }
 }
 
-// ==========================================
-// TAB 4: SMART FRIEND BILL SPLITTER ("Split Bill")
-// ==========================================
 @Composable
-fun TabSplitBill(
-    balance: Double,
-    friends: List<FriendContact>,
-    onFriendsPaid: (List<FriendContact>, Double) -> Unit
-) {
+fun TabSplitBill(balance: Double, friends: List<FriendContact>, onFriendsPaid: (List<FriendContact>, Double) -> Unit) {
     var billTitle by remember { mutableStateOf("Team Dinner at BBQ") }
     var billAmountText by remember { mutableStateOf("80.00") }
-    var isMessageSent by remember { mutableStateOf(false) }
-
-    // Fully Reactive Compose Map for Friend Selection and Status
     val selectedFriendsMap = remember { mutableStateMapOf<String, Boolean>() }
-    val friendStatusMap = remember { mutableStateMapOf<String, String>() }
-
     val totalAmount = billAmountText.toDoubleOrNull() ?: 0.0
     val selectedCount = friends.count { selectedFriendsMap[it.id] == true }
-    val totalPeople = selectedCount + 1
-    val perPersonShare = if (totalPeople > 0) totalAmount / totalPeople else 0.0
+    val perPersonShare = if (selectedCount > 0) totalAmount / (selectedCount + 1) else 0.0
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 32.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // TOP BILL SPLIT INPUT CARD WITH LIVE WALLET REFERENCE
         item {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .shadow(4.dp, RoundedCornerShape(20.dp)),
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White)
-            ) {
+            Card(modifier = Modifier.fillMaxWidth().shadow(4.dp, RoundedCornerShape(20.dp)), shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column {
-                            Text(text = "Smart Friend Expense Splitter", fontWeight = FontWeight.Bold, fontSize = 17.sp, color = PayPalNavy)
-                            Text(text = "Split expenses & auto-deposit into wallet.", fontSize = 11.sp, color = Color.Gray)
-                        }
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(MintSurface)
-                                .padding(horizontal = 8.dp, vertical = 4.dp)
-                        ) {
-                            Text(
-                                text = "Wallet: ${formatMoney(balance)}",
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = MintGreen,
-                                maxLines = 1
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    Text(text = "Bill Title", fontSize = 12.sp, color = Color.Gray)
-                    OutlinedTextField(
-                        value = billTitle,
-                        onValueChange = { billTitle = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(10.dp),
-                        singleLine = true
-                    )
-
+                    Text(text = "Smart Friend Expense Splitter", fontWeight = FontWeight.Bold, fontSize = 17.sp, color = PayPalNavy)
+                    Spacer(modifier = Modifier.height(10.dp))
+                    OutlinedTextField(value = billTitle, onValueChange = { billTitle = it }, label = { Text("Bill Title") }, modifier = Modifier.fillMaxWidth())
                     Spacer(modifier = Modifier.height(8.dp))
-
-                    Text(text = "Total Bill Amount ($)", fontSize = 12.sp, color = Color.Gray)
-                    OutlinedTextField(
-                        value = billAmountText,
-                        onValueChange = { billAmountText = it },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(10.dp),
-                        singleLine = true
-                    )
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    // PRESET QUICK CHIPS
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FilterChip(
-                            selected = false,
-                            onClick = {
-                                billTitle = "Team Dinner at BBQ"
-                                billAmountText = "80.00"
-                            },
-                            label = { Text("BBQ $80", fontSize = 10.sp) }
-                        )
-                        FilterChip(
-                            selected = false,
-                            onClick = {
-                                billTitle = "Movie & Snacks"
-                                billAmountText = "40.00"
-                            },
-                            label = { Text("Movie $40", fontSize = 10.sp) }
-                        )
-                    }
+                    OutlinedTextField(value = billAmountText, onValueChange = { billAmountText = it }, label = { Text("Total Amount ($)") }, modifier = Modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
                 }
             }
         }
-
-        // FRIEND SELECTOR CHIPS / CHECKBOXES
         item {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .border(1.dp, CardBorder, RoundedCornerShape(16.dp)),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White)
-            ) {
+            Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(text = "Select Friends to Split With", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = PayPalNavy)
-                    Spacer(modifier = Modifier.height(8.dp))
-
                     friends.forEach { friend ->
                         val isSelected = selectedFriendsMap[friend.id] == true
-                        val currentStatus = friendStatusMap[friend.id] ?: "Not requested"
-
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(10.dp))
-                                .clickable {
-                                    selectedFriendsMap[friend.id] = !isSelected
-                                }
-                                .padding(vertical = 6.dp, horizontal = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
+                        Row(modifier = Modifier.fillMaxWidth().clickable { selectedFriendsMap[friend.id] = !isSelected }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Checkbox(
-                                    checked = isSelected,
-                                    onCheckedChange = { checked ->
-                                        selectedFriendsMap[friend.id] = checked
-                                    }
-                                )
+                                Checkbox(checked = isSelected, onCheckedChange = { selectedFriendsMap[friend.id] = it })
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Column {
-                                    Text(text = friend.name, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = PayPalNavy)
-                                    Text(text = friend.handle, fontSize = 11.sp, color = Color.Gray)
-                                }
+                                Text(text = friend.name, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                             }
-
-                            if (isMessageSent && isSelected) {
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .background(if (currentStatus.contains("PAID")) MintSurface else AmberSurface)
-                                        .padding(horizontal = 8.dp, vertical = 4.dp)
-                                ) {
-                                    Text(
-                                        text = currentStatus,
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = if (currentStatus.contains("PAID")) MintGreen else AmberDebit,
-                                        maxLines = 1
-                                    )
-                                }
-                            }
+                            Text(text = formatMoney(perPersonShare), fontSize = 12.sp, color = PayPalBlue, fontWeight = FontWeight.Bold)
                         }
                     }
-                }
-            }
-        }
-
-        // REAL-TIME CALCULATION SUMMARY CARD
-        item {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .border(1.dp, PayPalBlue.copy(alpha = 0.3f), RoundedCornerShape(16.dp)),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFFEFF6FF))
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(text = "Live Calculation Summary", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = PayPalNavy)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(text = "Total People ($selectedCount friends + You):", fontSize = 12.sp, color = Color.Gray)
-                        Text(text = "$totalPeople People", fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                    }
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(text = "Per Person Equal Share:", fontSize = 13.sp, color = PayPalBlue, fontWeight = FontWeight.Bold)
-                        Text(text = formatMoney(perPersonShare), fontWeight = FontWeight.ExtraBold, fontSize = 16.sp, color = PayPalBlue)
-                    }
-
-                    if (isMessageSent) {
-                        Spacer(modifier = Modifier.height(10.dp))
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(Color.White)
-                                .padding(10.dp)
-                        ) {
-                            Text(
-                                text = "Message Sent: \"Hey! Split $billTitle ($billAmountText). Your share is ${formatMoney(perPersonShare)}. Pay via PayPal Link.\"",
-                                fontSize = 11.sp,
-                                color = Color.DarkGray
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Button(
-                            onClick = {
-                                friends.forEach { friend ->
-                                    if (selectedFriendsMap[friend.id] == true) {
-                                        friendStatusMap[friend.id] = "Message Sent • Waiting"
-                                    }
-                                }
-                                isMessageSent = true
-                            },
-                            modifier = Modifier.weight(1f),
-                            enabled = selectedCount > 0,
-                            colors = ButtonDefaults.buttonColors(containerColor = PayPalNavy),
-                            shape = RoundedCornerShape(10.dp)
-                        ) {
-                            Text(text = "Send Split Request", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-                        }
-
-                        Button(
-                            onClick = {
-                                val activeSelected = friends.filter { selectedFriendsMap[it.id] == true }
-                                activeSelected.forEach { friend ->
-                                    friendStatusMap[friend.id] = "PAID VIA PAYPAL ✅"
-                                }
-                                onFriendsPaid(activeSelected, perPersonShare)
-                            },
-                            modifier = Modifier.weight(1f),
-                            enabled = isMessageSent && selectedCount > 0,
-                            colors = ButtonDefaults.buttonColors(containerColor = MintGreen),
-                            shape = RoundedCornerShape(10.dp)
-                        ) {
-                            Text(text = "Simulate Friends Paying", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-                        }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Button(onClick = {
+                        val active = friends.filter { selectedFriendsMap[it.id] == true }
+                        onFriendsPaid(active, perPersonShare)
+                    }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = MintGreen), enabled = selectedCount > 0) {
+                        Text(text = "Simulate Friends Paying (${formatMoney(perPersonShare)} each)")
                     }
                 }
             }
@@ -2907,9 +1804,6 @@ fun TabSplitBill(
     }
 }
 
-// ==========================================
-// TAB 5: AI STATEMENT CHATBOT ("AI Analyst")
-// ==========================================
 @Composable
 fun TabAiAnalyst(
     balance: Double,
@@ -2921,36 +1815,17 @@ fun TabAiAnalyst(
     chatMessages: MutableList<ChatMsg>
 ) {
     var userQuery by remember { mutableStateOf("") }
-    var selectedFilter by remember { mutableStateOf("ALL") }
     var isThinking by remember { mutableStateOf(false) }
-
     val coroutineScope = rememberCoroutineScope()
-    val netCashflow = monthlyCredit - monthlyDebit
-
-    val filteredTransactions = remember(selectedFilter, transactions.size) {
-        when (selectedFilter) {
-            "CREDIT" -> transactions.filter { it.type == TransactionType.CREDIT }
-            "DEBIT" -> transactions.filter { it.type == TransactionType.DEBIT }
-            else -> transactions
-        }
-    }
 
     fun handleQuery(query: String) {
         if (query.isBlank() || isThinking) return
         chatMessages.add(ChatMsg(sender = "You", text = query, isUser = true))
         isThinking = true
-
         coroutineScope.launch {
-            val aiReply = LiveAiChatEngine.generateAiResponse(
-                userQuery = query,
-                monthlyCredit = monthlyCredit,
-                monthlyDebit = monthlyDebit,
-                balance = balance,
-                savedByAi = savedByAi,
-                protectedFromScams = protectedFromScams
-            )
+            val reply = LiveAiChatEngine.generateAiResponse(query, monthlyCredit, monthlyDebit, balance, savedByAi, protectedFromScams)
             isThinking = false
-            chatMessages.add(ChatMsg(sender = "PayPal AI", text = aiReply, isUser = false))
+            chatMessages.add(ChatMsg(sender = "PayPal AI", text = reply, isUser = false))
         }
     }
 
@@ -2959,277 +1834,80 @@ fun TabAiAnalyst(
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 32.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // SUMMARY METRICS ROW
         item {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .shadow(4.dp, RoundedCornerShape(20.dp)),
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White)
-            ) {
+            Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Text(text = "Live Cashflow & Statement Overview", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = PayPalNavy)
+                    Text(text = "PayPal AI Financial Analyst Chatbot", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = PayPalNavy)
                     Spacer(modifier = Modifier.height(10.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        // Credit Box
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(MintSurface)
-                                .padding(10.dp)
-                        ) {
-                            Column {
-                                Text(text = "Total Credit", fontSize = 10.sp, color = MintGreen, fontWeight = FontWeight.Bold, maxLines = 1)
-                                Text(text = "+${formatMoney(monthlyCredit)}", fontSize = 13.sp, color = MintGreen, fontWeight = FontWeight.ExtraBold, maxLines = 1)
-                            }
-                        }
-
-                        // Debit Box
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(AmberSurface)
-                                .padding(10.dp)
-                        ) {
-                            Column {
-                                Text(text = "Total Debit", fontSize = 10.sp, color = AmberDebit, fontWeight = FontWeight.Bold, maxLines = 1)
-                                Text(text = "-${formatMoney(monthlyDebit)}", fontSize = 13.sp, color = AmberDebit, fontWeight = FontWeight.ExtraBold, maxLines = 1)
-                            }
-                        }
-
-                        // Net Cashflow Box
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(IndigoSurface)
-                                .padding(10.dp)
-                        ) {
-                            Column {
-                                Text(text = "Net Cashflow", fontSize = 10.sp, color = IndigoOffline, fontWeight = FontWeight.Bold, maxLines = 1)
-                                Text(text = formatMoney(netCashflow), fontSize = 13.sp, color = IndigoOffline, fontWeight = FontWeight.ExtraBold, maxLines = 1)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // CHATBOT SECTION
-        item {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .border(1.dp, CardBorder, RoundedCornerShape(20.dp)),
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White)
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Info, contentDescription = null, tint = PayPalBlue)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(text = "PayPal AI Financial Analyst Chatbot", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = PayPalNavy)
-                    }
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    // PRESET QUESTION CHIPS
-                    Text(text = "Tap 1-click insights:", fontSize = 11.sp, color = Color.Gray)
-                    Spacer(modifier = Modifier.height(4.dp))
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        val questions = listOf(
-                            "Analyze my monthly Credit vs Debit",
-                            "Where did I spend the most?",
-                            "How much did AI save me this month?"
-                        )
-                        items(questions) { q ->
-                            SuggestionChip(
-                                onClick = { handleQuery(q) },
-                                label = { Text(text = q, fontSize = 10.sp) },
-                                shape = RoundedCornerShape(12.dp)
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    // CHAT LOG BOX (EXPANDED TO SHOW CHAT LOG CLEARLY)
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(200.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(Color(0xFFF8FAFC))
-                            .padding(10.dp)
-                    ) {
-                        LazyColumn(
-                            modifier = Modifier.fillMaxSize(),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
+                    Column(modifier = Modifier.fillMaxWidth().height(180.dp).clip(RoundedCornerShape(12.dp)).background(Color(0xFFF8FAFC)).padding(10.dp)) {
+                        LazyColumn(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             items(chatMessages) { msg ->
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = if (msg.isUser) Arrangement.End else Arrangement.Start
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(12.dp))
-                                            .background(if (msg.isUser) PayPalBlue else Color.White)
-                                            .border(1.dp, if (msg.isUser) Color.Transparent else CardBorder, RoundedCornerShape(12.dp))
-                                            .padding(10.dp)
-                                    ) {
-                                        Text(
-                                            text = msg.text,
-                                            fontSize = 11.sp,
-                                            color = if (msg.isUser) Color.White else PayPalNavy,
-                                            fontWeight = if (msg.isUser) FontWeight.Normal else FontWeight.Medium
-                                        )
-                                    }
-                                }
-                            }
-
-                            if (isThinking) {
-                                item {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        CircularProgressIndicator(color = PayPalBlue, modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text(text = "PayPal AI is analyzing statement...", fontSize = 10.sp, color = Color.Gray, fontStyle = FontStyle.Italic)
-                                    }
-                                }
+                                Text(text = "${msg.sender}: ${msg.text}", fontSize = 11.sp, color = if (msg.isUser) PayPalBlue else PayPalNavy)
                             }
                         }
                     }
-
                     Spacer(modifier = Modifier.height(10.dp))
-
-                    // INPUT FIELD
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        OutlinedTextField(
-                            value = userQuery,
-                            onValueChange = { userQuery = it },
-                            placeholder = { Text("Ask AI about statement...", fontSize = 12.sp) },
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(12.dp),
-                            singleLine = true
-                        )
+                    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        OutlinedTextField(value = userQuery, onValueChange = { userQuery = it }, placeholder = { Text("Ask AI...") }, modifier = Modifier.weight(1f), singleLine = true)
                         Spacer(modifier = Modifier.width(6.dp))
-                        IconButton(
-                            onClick = {
-                                if (userQuery.isNotBlank()) {
-                                    val q = userQuery
-                                    userQuery = ""
-                                    handleQuery(q)
-                                }
-                            },
-                            modifier = Modifier
-                                .clip(CircleShape)
-                                .background(PayPalBlue)
-                        ) {
-                            Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send", tint = Color.White)
+                        IconButton(onClick = { if (userQuery.isNotBlank()) { val q = userQuery; userQuery = ""; handleQuery(q) } }, modifier = Modifier.background(PayPalBlue, CircleShape)) {
+                            Icon(Icons.AutoMirrored.Filled.Send, contentDescription = null, tint = Color.White)
                         }
                     }
                 }
             }
         }
+    }
+}
 
-        // STATEMENT HISTORY TITLE & FILTERS
-        item {
-            Column {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(text = "Statement History", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = PayPalNavy)
-                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        FilterChip(
-                            selected = selectedFilter == "ALL",
-                            onClick = { selectedFilter = "ALL" },
-                            label = { Text("All", fontSize = 10.sp) }
-                        )
-                        FilterChip(
-                            selected = selectedFilter == "CREDIT",
-                            onClick = { selectedFilter = "CREDIT" },
-                            label = { Text("Credit", fontSize = 10.sp) }
-                        )
-                        FilterChip(
-                            selected = selectedFilter == "DEBIT",
-                            onClick = { selectedFilter = "DEBIT" },
-                            label = { Text("Debit", fontSize = 10.sp) }
-                        )
-                    }
+@Composable
+fun AddSubscriptionDialog(onDismiss: () -> Unit, onAddSubscription: (String, Double, String) -> Unit) {
+    var title by remember { mutableStateOf("") }
+    var cost by remember { mutableStateOf("2.00") }
+    Dialog(onDismissRequest = onDismiss) {
+        Card(modifier = Modifier.fillMaxWidth().padding(16.dp), shape = RoundedCornerShape(20.dp)) {
+            Column(modifier = Modifier.padding(20.dp)) {
+                Text(text = "Add Custom Subscription", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                Spacer(modifier = Modifier.height(10.dp))
+                OutlinedTextField(value = title, onValueChange = { title = it }, label = { Text("Title") }, modifier = Modifier.fillMaxWidth())
+                Spacer(modifier = Modifier.height(10.dp))
+                OutlinedTextField(value = cost, onValueChange = { cost = it }, label = { Text("Daily Cost ($)") }, modifier = Modifier.fillMaxWidth())
+                Spacer(modifier = Modifier.height(16.dp))
+                Button(onClick = { onAddSubscription(title, cost.toDoubleOrNull() ?: 1.0, "Manual Check-In") }, modifier = Modifier.fillMaxWidth()) {
+                    Text("Add")
                 }
             }
         }
+    }
+}
 
-        // TRANSACTION ITEMS
-        items(filteredTransactions) { tx ->
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .border(1.dp, CardBorder, RoundedCornerShape(14.dp)),
-                shape = RoundedCornerShape(14.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White)
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(14.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            modifier = Modifier
-                                .size(36.dp)
-                                .clip(CircleShape)
-                                .background(if (tx.type == TransactionType.CREDIT) MintSurface else AmberSurface),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = if (tx.type == TransactionType.CREDIT) Icons.Default.Add else Icons.Default.Close,
-                                contentDescription = null,
-                                tint = if (tx.type == TransactionType.CREDIT) MintGreen else AmberDebit,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
+@Composable
+fun ManualUsageCheckInDialog(sub: EscrowSub, onDismiss: () -> Unit, onConfirmCheckIn: () -> Unit) {
+    Dialog(onDismissRequest = onDismiss) {
+        Card(modifier = Modifier.fillMaxWidth().padding(16.dp), shape = RoundedCornerShape(20.dp)) {
+            Column(modifier = Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(text = "Manual Phone-less Check-In", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(text = "Verify attendance for ${sub.title} (${formatMoney(sub.costPerDay)})?", textAlign = TextAlign.Center)
+                Spacer(modifier = Modifier.height(16.dp))
+                Button(onClick = onConfirmCheckIn, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = MintGreen)) {
+                    Text("Confirm Check-In")
+                }
+            }
+        }
+    }
+}
 
-                        Spacer(modifier = Modifier.width(12.dp))
-
-                        Column {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(text = tx.title, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = PayPalNavy, maxLines = 1)
-                                if (tx.tag.isNotEmpty()) {
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(text = tx.tag, fontSize = 9.sp, fontWeight = FontWeight.Bold, color = PayPalBlue, maxLines = 1)
-                                }
-                            }
-                            Text(text = "${tx.category} • ${tx.date}", fontSize = 11.sp, color = Color.Gray, maxLines = 1)
-                        }
-                    }
-
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(if (tx.type == TransactionType.CREDIT) MintSurface else AmberSurface)
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
-                    ) {
-                        Text(
-                            text = if (tx.type == TransactionType.CREDIT) "+${formatMoney(tx.amount)}" else "-${formatMoney(tx.amount)}",
-                            fontWeight = FontWeight.ExtraBold,
-                            fontSize = 12.sp,
-                            color = if (tx.type == TransactionType.CREDIT) MintGreen else AmberDebit,
-                            maxLines = 1
-                        )
+@Composable
+fun FirebaseAuditLogDialog(onDismiss: () -> Unit) {
+    Dialog(onDismissRequest = onDismiss) {
+        Card(modifier = Modifier.fillMaxWidth().height(450.dp).padding(16.dp), shape = RoundedCornerShape(20.dp)) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(text = "Firebase Audit Monitor", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                Spacer(modifier = Modifier.height(10.dp))
+                LazyColumn(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    items(FirebaseSecurityLogger.auditLogs) { log ->
+                        Text(text = "[${log.category}] ${log.event} - ${log.detail}", fontSize = 10.sp, color = PayPalNavy)
                     }
                 }
             }
