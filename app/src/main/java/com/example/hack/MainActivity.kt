@@ -1724,6 +1724,13 @@ fun TabAiAnalyst(
     var isThinking by remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
 
+    val defaultQuestions = listOf(
+        "Analyze my monthly cashflow and spending",
+        "Where did I spend the most this month?",
+        "How much money did AI save me?",
+        "Are my payment methods and wallet secure?"
+    )
+
     fun handleQuery(query: String) {
         if (query.isBlank() || isThinking) return
         chatMessages.add(ChatMsg(sender = "You", text = query, isUser = true))
@@ -1741,23 +1748,86 @@ fun TabAiAnalyst(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         item {
-            Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+            Card(
+                modifier = Modifier.fillMaxWidth().shadow(6.dp, RoundedCornerShape(20.dp)),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White)
+            ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Text(text = "PayPal AI Financial Analyst Chatbot", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = PayPalNavy)
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Column(modifier = Modifier.fillMaxWidth().height(180.dp).clip(RoundedCornerShape(12.dp)).background(Color(0xFFF8FAFC)).padding(10.dp)) {
-                        LazyColumn(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        PayPalLogoBadge(height = 26.dp)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(text = "PayPal AI Financial Analyst", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = PayPalNavy)
+                    }
+                    Text(text = "Powered by Gemini AI • Real-time payment & financial analysis", fontSize = 11.sp, color = Color.Gray)
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    Text(text = "Suggested Questions:", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = PayPalBlue)
+                    Spacer(modifier = Modifier.height(6.dp))
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        items(defaultQuestions) { question ->
+                            AssistChip(
+                                onClick = { handleQuery(question) },
+                                label = { Text(text = question, fontSize = 11.sp) },
+                                colors = AssistChipDefaults.assistChipColors(containerColor = Color(0xFFF1F5F9))
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(240.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color(0xFFF8FAFC))
+                            .padding(10.dp)
+                    ) {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
                             items(chatMessages) { msg ->
-                                Text(text = "${msg.sender}: ${msg.text}", fontSize = 11.sp, color = if (msg.isUser) PayPalBlue else PayPalNavy)
+                                Column(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalAlignment = if (msg.isUser) Alignment.End else Alignment.Start
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(if (msg.isUser) PayPalBlue else Color.White)
+                                            .border(1.dp, if (msg.isUser) PayPalBlue else CardBorder, RoundedCornerShape(12.dp))
+                                            .padding(10.dp)
+                                    ) {
+                                        Column {
+                                            Text(text = msg.sender, fontSize = 9.sp, fontWeight = FontWeight.Bold, color = if (msg.isUser) Color.White.copy(alpha = 0.8f) else PayPalBlue)
+                                            Spacer(modifier = Modifier.height(2.dp))
+                                            Text(text = msg.text, fontSize = 12.sp, color = if (msg.isUser) Color.White else PayPalNavy)
+                                        }
+                                    }
+                                }
+                            }
+                            if (isThinking) {
+                                item {
+                                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(4.dp)) {
+                                        CircularProgressIndicator(modifier = Modifier.size(16.dp), color = PayPalBlue, strokeWidth = 2.dp)
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(text = "Gemini AI is analyzing your finances...", fontSize = 11.sp, color = Color.Gray, fontStyle = FontStyle.Italic)
+                                    }
+                                }
                             }
                         }
                     }
-                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
                     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         OutlinedTextField(
                             value = userQuery,
                             onValueChange = { userQuery = it },
-                            placeholder = { Text("Ask AI...") },
+                            placeholder = { Text("Ask Gemini AI about your payments...") },
                             colors = OutlinedTextFieldDefaults.colors(
                                 focusedTextColor = PayPalNavy,
                                 unfocusedTextColor = PayPalNavy,
@@ -1765,11 +1835,21 @@ fun TabAiAnalyst(
                                 unfocusedBorderColor = Color.LightGray
                             ),
                             modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(12.dp),
                             singleLine = true
                         )
                         Spacer(modifier = Modifier.width(6.dp))
-                        IconButton(onClick = { if (userQuery.isNotBlank()) { val q = userQuery; userQuery = ""; handleQuery(q) } }, modifier = Modifier.background(PayPalBlue, CircleShape)) {
-                            Icon(Icons.AutoMirrored.Filled.Send, contentDescription = null, tint = Color.White)
+                        IconButton(
+                            onClick = {
+                                if (userQuery.isNotBlank()) {
+                                    val q = userQuery
+                                    userQuery = ""
+                                    handleQuery(q)
+                                }
+                            },
+                            modifier = Modifier.background(PayPalBlue, CircleShape)
+                        ) {
+                            Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send", tint = Color.White)
                         }
                     }
                 }
