@@ -832,12 +832,18 @@ fun PayPalFintechApp(onSignOut: () -> Unit) {
 
     Scaffold(
         topBar = {
-            HeaderBar(
-                onSignOut = {
+            Column {
+                HeaderBar(
+                    onSignOut = {
+                        FirebaseAuthManager.signOut()
+                        onSignOut()
+                    }
+                )
+                GuestWarningBanner(onLoginClick = {
                     FirebaseAuthManager.signOut()
                     onSignOut()
-                }
-            )
+                })
+            }
         },
         bottomBar = {
             NavBottomBar(selectedTab = selectedTab) { selectedTab = it }
@@ -1130,6 +1136,52 @@ fun PayPalFintechApp(onSignOut: () -> Unit) {
                             }
                         }
                     }
+                }
+            }
+        }
+    }
+}
+
+// ==========================================
+// GUEST WARNING BANNER
+// ==========================================
+@Composable
+fun GuestWarningBanner(onLoginClick: () -> Unit) {
+    if (FirebaseAuthManager.currentUserEmail == "guest.explorer@paypal-ai.com") {
+        Surface(
+            color = AmberSurface,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(Icons.Default.Warning, contentDescription = null, tint = AmberDebit, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "Guest mode: Data will not be stored in cloud. Log in to sync.",
+                        fontSize = 11.sp,
+                        color = PayPalNavy,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                TextButton(
+                    onClick = onLoginClick,
+                    colors = ButtonDefaults.textButtonColors(contentColor = PayPalBlue)
+                ) {
+                    Text(text = "Log In", fontWeight = FontWeight.Bold, fontSize = 11.sp)
                 }
             }
         }
