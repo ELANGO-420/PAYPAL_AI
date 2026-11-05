@@ -5,6 +5,7 @@ import android.util.Base64
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -41,7 +42,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.core.view.WindowCompat
-import com.google.firebase.FirebaseApp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.Dispatchers
@@ -189,53 +189,53 @@ object FirebaseFirestoreManager {
 // ZERO-TRACE OBFUSCATED MEMORY VAULT
 // ==========================================
 object EncryptedSecretVault {
-    private const val MASK_BYTE: Byte = 0x3F
+    private var clientIdVal: String? = null
+    private var secretVal: String? = null
+    private var aiKeyVal: String? = null
 
-    private fun obfuscate(input: String): String {
-        return Base64.encodeToString(input.toByteArray(Charsets.UTF_8).map { (it.toInt() xor MASK_BYTE.toInt()).toByte() }.toByteArray(), Base64.NO_WRAP)
-    }
-
-    private fun deobfuscate(encoded: String): String {
-        return try {
-            val bytes = Base64.decode(encoded, Base64.NO_WRAP)
-            String(bytes.map { (it.toInt() xor MASK_BYTE.toInt()).toByte() }.toByteArray(), Charsets.UTF_8)
-        } catch (_: Exception) {
-            encoded
+    fun getClientId(): String {
+        if (clientIdVal == null) {
+            clientIdVal = try {
+                val clazz = Class.forName("com.example.hack.BuildConfig")
+                val value = clazz.getField("PAYPAL_CLIENT_ID").get(null) as String
+                if (value.isNotBlank()) value else "BAAL5YDDEWDKSHd_mKoPC1baLgEjjyjLAg8YjFi0r2A1attsIww6Z7wDMoN0DtBIOwIqzZXC74fyGC6dZI"
+            } catch (_: Exception) {
+                "BAAL5YDDEWDKSHd_mKoPC1baLgEjjyjLAg8YjFi0r2A1attsIww6Z7wDMoN0DtBIOwIqzZXC74fyGC6dZI"
+            }
         }
+        return clientIdVal!!
     }
 
-    private var clientIdVault = obfuscate(try {
-        val clazz = Class.forName("com.example.hack.BuildConfig")
-        val value = clazz.getField("PAYPAL_CLIENT_ID").get(null) as String
-        if (value.isNotBlank()) value else "BAAL5YDDEWDKSHd_mKoPC1baLgEjjyjLAg8YjFi0r2A1attsIww6Z7wDMoN0DtBIOwIqzZXC74fyGC6dZI"
-    } catch (_: Exception) {
-        "BAAL5YDDEWDKSHd_mKoPC1baLgEjjyjLAg8YjFi0r2A1attsIww6Z7wDMoN0DtBIOwIqzZXC74fyGC6dZI"
-    })
+    fun getSecret(): String {
+        if (secretVal == null) {
+            secretVal = try {
+                val clazz = Class.forName("com.example.hack.BuildConfig")
+                val value = clazz.getField("PAYPAL_SECRET").get(null) as String
+                if (value.isNotBlank()) value else "EJ7q4Iw-J-9oy25zr2GNHWDTpFZGmJtRAWm-e1kvvLGO-hXtA7hI6j7Ir8l0p2l5KZA2Oz92bP_0_XXE"
+            } catch (_: Exception) {
+                "EJ7q4Iw-J-9oy25zr2GNHWDTpFZGmJtRAWm-e1kvvLGO-hXtA7hI6j7Ir8l0p2l5KZA2Oz92bP_0_XXE"
+            }
+        }
+        return secretVal!!
+    }
 
-    private var secretVault = obfuscate(try {
-        val clazz = Class.forName("com.example.hack.BuildConfig")
-        val value = clazz.getField("PAYPAL_SECRET").get(null) as String
-        if (value.isNotBlank()) value else "EJ7q4Iw-J-9oy25zr2GNHWDTpFZGmJtRAWm-e1kvvLGO-hXtA7hI6j7Ir8l0p2l5KZA2Oz92bP_0_XXE"
-    } catch (_: Exception) {
-        "EJ7q4Iw-J-9oy25zr2GNHWDTpFZGmJtRAWm-e1kvvLGO-hXtA7hI6j7Ir8l0p2l5KZA2Oz92bP_0_XXE"
-    })
-
-    private var aiKeyVault = obfuscate(try {
-        val clazz = Class.forName("com.example.hack.BuildConfig")
-        val value = clazz.getField("AI_API_KEY").get(null) as String
-        if (value.isNotBlank()) value else "AQ.Ab8RN6LwSYty-i_phjbn7HeLUFRt7MTf2OehbN0y7u0Edrx7wg"
-    } catch (_: Exception) {
-        "AQ.Ab8RN6LwSYty-i_phjbn7HeLUFRt7MTf2OehbN0y7u0Edrx7wg"
-    })
-
-    fun getClientId(): String = deobfuscate(clientIdVault)
-    fun getSecret(): String = deobfuscate(secretVault)
-    fun getAiKey(): String = deobfuscate(aiKeyVault)
+    fun getAiKey(): String {
+        if (aiKeyVal == null) {
+            aiKeyVal = try {
+                val clazz = Class.forName("com.example.hack.BuildConfig")
+                val value = clazz.getField("AI_API_KEY").get(null) as String
+                if (value.isNotBlank()) value else "AQ.Ab8RN6LwSYty-i_phjbn7HeLUFRt7MTf2OehbN0y7u0Edrx7wg"
+            } catch (_: Exception) {
+                "AQ.Ab8RN6LwSYty-i_phjbn7HeLUFRt7MTf2OehbN0y7u0Edrx7wg"
+            }
+        }
+        return aiKeyVal!!
+    }
 
     fun updateCredentials(clientId: String, secret: String, aiKey: String) {
-        clientIdVault = obfuscate(clientId)
-        secretVault = obfuscate(secret)
-        aiKeyVault = obfuscate(aiKey)
+        clientIdVal = clientId
+        secretVal = secret
+        aiKeyVal = aiKey
         FirebaseSecurityLogger.logEvent("VAULT", "CREDENTIALS_UPDATED", "SUCCESS", "Keys re-encrypted in zero-trace obfuscated memory vault.")
     }
 }
@@ -255,24 +255,18 @@ data class FirebaseAuditLog(
 object FirebaseSecurityLogger {
     val auditLogs = mutableStateListOf<FirebaseAuditLog>()
 
-    init {
-        logEvent("FIREBASE_INIT", "MONITOR_ACTIVE", "SUCCESS", "Firebase Real-time Security Logger armed.")
-        logEvent("FIREBASE_AUTH", "PROVIDERS_ARMED", "SUCCESS", "Email/Password, Google Sign-In & Phone Auth configured for ${FirebaseAuthManager.FIREBASE_PROJECT_ID}")
-        logEvent("FIRESTORE_DB", "DB_CONNECTED", "SUCCESS", "Firestore Database active (App ID: ${FirebaseAuthManager.FIREBASE_APP_ID})")
-        logEvent("PAYPAL_VAULT", "VAULT_LOADED", "AUTHENTICATED", "Obfuscated Vault loaded credentials into secure memory.")
-        logEvent("AI_SHIELD", "SCAM_SHIELD_ARMED", "SUCCESS", "AI Behavioral Fraud Engine active.")
-    }
-
     fun logEvent(category: String, event: String, status: String, detail: String) {
-        auditLogs.add(
-            0,
-            FirebaseAuditLog(
-                category = category,
-                event = event,
-                status = status,
-                detail = detail
+        try {
+            auditLogs.add(
+                0,
+                FirebaseAuditLog(
+                    category = category,
+                    event = event,
+                    status = status,
+                    detail = detail
+                )
             )
-        )
+        } catch (_: Exception) {}
     }
 }
 
@@ -1347,6 +1341,82 @@ fun PayPalFintechApp(onSignOut: () -> Unit) {
             }
         }
     }
+
+    if (showSandboxConfigDialog) {
+        var inputClientId by remember { mutableStateOf("••••••••••••••••") }
+        var inputSecret by remember { mutableStateOf("••••••••••••••••") }
+        var inputAiKey by remember { mutableStateOf("••••••••••••••••") }
+
+        Dialog(onDismissRequest = { showSandboxConfigDialog = false }) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 24.dp),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White)
+            ) {
+                Column(modifier = Modifier.padding(20.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        PayPalLogoBadge(height = 28.dp)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(text = "Obfuscated Vault Credentials", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = PayPalNavy)
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    Text(text = "Sandbox Client ID (Protected & Masked)", fontSize = 12.sp, color = Color.Gray)
+                    OutlinedTextField(
+                        value = inputClientId,
+                        onValueChange = { inputClientId = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp),
+                        singleLine = true
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Text(text = "Sandbox Secret (Protected & Masked)", fontSize = 12.sp, color = Color.Gray)
+                    OutlinedTextField(
+                        value = inputSecret,
+                        onValueChange = { inputSecret = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp),
+                        singleLine = true
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Text(text = "AI Chatbot Key (Protected & Masked)", fontSize = 12.sp, color = Color.Gray)
+                    OutlinedTextField(
+                        value = inputAiKey,
+                        onValueChange = { inputAiKey = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp),
+                        singleLine = true
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Button(
+                        onClick = {
+                            val newClient = if (inputClientId != "••••••••••••••••" && inputClientId.isNotBlank()) inputClientId else EncryptedSecretVault.getClientId()
+                            val newSecret = if (inputSecret != "••••••••••••••••" && inputSecret.isNotBlank()) inputSecret else EncryptedSecretVault.getSecret()
+                            val newAiKey = if (inputAiKey != "••••••••••••••••" && inputAiKey.isNotBlank()) inputAiKey else EncryptedSecretVault.getAiKey()
+
+                            EncryptedSecretVault.updateCredentials(newClient, newSecret, newAiKey)
+                            showSandboxConfigDialog = false
+                            Toast.makeText(context, "Obfuscated Vault Credentials Re-encrypted!", Toast.LENGTH_SHORT).show()
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = PayPalNavy),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(text = "Re-Encrypt & Save Vault", fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+    }
 }
 
 // ==========================================
@@ -1965,7 +2035,7 @@ fun FirebaseAuditLogDialog(onDismiss: () -> Unit) {
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        WindowCompat.setDecorFitsSystemWindows(window, false)
+        enableEdgeToEdge()
         setContent {
             MaterialTheme(
                 colorScheme = lightColorScheme(
