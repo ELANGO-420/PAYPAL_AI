@@ -2036,15 +2036,26 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        WindowCompat.getInsetsController(window, window.decorView).apply {
+            isAppearanceLightStatusBars = true
+            isAppearanceLightNavigationBars = true
+        }
         setContent {
-            MaterialTheme(
-                colorScheme = lightColorScheme(
-                    primary = PayPalNavy,
-                    secondary = PayPalBlue,
-                    background = SlateBg,
-                    surface = Color.White
-                )
-            ) {
+            val paypalColorScheme = lightColorScheme(
+                primary = PayPalNavy,
+                onPrimary = Color.White,
+                secondary = PayPalBlue,
+                onSecondary = Color.White,
+                background = SlateBg,
+                onBackground = PayPalNavy,
+                surface = Color.White,
+                onSurface = PayPalNavy,
+                surfaceContainer = Color.White,
+                surfaceVariant = Color(0xFFF1F5F9),
+                onSurfaceVariant = PayPalNavy
+            )
+
+            MaterialTheme(colorScheme = paypalColorScheme) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = SlateBg
