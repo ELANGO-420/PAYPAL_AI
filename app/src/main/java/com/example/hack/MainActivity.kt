@@ -41,7 +41,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
-import androidx.core.view.WindowCompat
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.Dispatchers
@@ -75,20 +74,11 @@ fun formatMoney(amount: Double): String {
     return String.format(Locale.US, "$%.2f", amount)
 }
 
-fun maskKey(key: String): String {
-    return if (key.length > 12) key.take(4) + "••••••••" + key.takeLast(4) else "••••••••••••••••"
-}
-
 // ==========================================
-// FIREBASE AUTHENTICATION & FIRESTORE MANAGER
-// Project ID: com-example-hack-90b75
-// App ID: 1:915204520489:android:38ebb8a76da51e29b3ba38
+// SECURE BACKEND MANAGERS (CREDENTIALS HIDDEN)
 // ==========================================
 object FirebaseAuthManager {
-    const val FIREBASE_PROJECT_ID = "com-example-hack-90b75"
-    const val FIREBASE_APP_ID = "1:915204520489:android:38ebb8a76da51e29b3ba38"
-
-    var currentUserEmail by mutableStateOf("demo_user@paypal-ai.com")
+    var currentUserEmail by mutableStateOf("user@paypal-ai.com")
     var isUserSignedIn by mutableStateOf(false)
 
     fun signInWithEmail(email: String, pass: String, onSuccess: () -> Unit, onError: (String) -> Unit) {
@@ -98,16 +88,14 @@ object FirebaseAuthManager {
         }
         try {
             FirebaseAuth.getInstance().signInWithEmailAndPassword(email, pass)
-                .addOnCompleteListener { task ->
+                .addOnCompleteListener {
                     currentUserEmail = email
                     isUserSignedIn = true
-                    FirebaseSecurityLogger.logEvent("FIREBASE_AUTH", "EMAIL_SIGN_IN", "SUCCESS", "Authenticated user $email via Firebase Auth")
                     onSuccess()
                 }
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             currentUserEmail = email
             isUserSignedIn = true
-            FirebaseSecurityLogger.logEvent("FIREBASE_AUTH", "EMAIL_SIGN_IN_FALLBACK", "SUCCESS", "Local session active for $email")
             onSuccess()
         }
     }
@@ -119,16 +107,14 @@ object FirebaseAuthManager {
         }
         try {
             FirebaseAuth.getInstance().createUserWithEmailAndPassword(email, pass)
-                .addOnCompleteListener { task ->
+                .addOnCompleteListener {
                     currentUserEmail = email
                     isUserSignedIn = true
-                    FirebaseSecurityLogger.logEvent("FIREBASE_AUTH", "EMAIL_SIGN_UP", "SUCCESS", "Registered new user $email via Firebase Auth")
                     onSuccess()
                 }
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             currentUserEmail = email
             isUserSignedIn = true
-            FirebaseSecurityLogger.logEvent("FIREBASE_AUTH", "EMAIL_SIGN_UP_FALLBACK", "SUCCESS", "Local session active for $email")
             onSuccess()
         }
     }
@@ -136,7 +122,6 @@ object FirebaseAuthManager {
     fun signInWithGoogle(onSuccess: () -> Unit) {
         currentUserEmail = "google_user@paypal-ai.com"
         isUserSignedIn = true
-        FirebaseSecurityLogger.logEvent("FIREBASE_AUTH", "GOOGLE_SIGN_IN", "AUTHENTICATED", "Authenticated via Firebase Google Sign-In.")
         onSuccess()
     }
 
@@ -144,7 +129,6 @@ object FirebaseAuthManager {
         if (otpCode == "123456" || otpCode.length == 6) {
             currentUserEmail = "phone_user@paypal-ai.com"
             isUserSignedIn = true
-            FirebaseSecurityLogger.logEvent("FIREBASE_AUTH", "PHONE_AUTH", "SUCCESS", "Phone SMS OTP verified via Firebase Auth.")
             onSuccess()
         } else {
             onError("Invalid OTP code. Enter 6 digits (e.g. 123456).")
@@ -157,7 +141,6 @@ object FirebaseAuthManager {
         } catch (_: Exception) {}
         currentUserEmail = "Anonymous"
         isUserSignedIn = false
-        FirebaseSecurityLogger.logEvent("FIREBASE_AUTH", "SIGN_OUT", "SUCCESS", "Signed out of Firebase Auth.")
     }
 }
 
@@ -176,17 +159,12 @@ object FirebaseFirestoreManager {
                 .document(FirebaseAuthManager.currentUserEmail)
                 .collection("transactions")
                 .add(data)
-                .addOnSuccessListener {
-                    FirebaseSecurityLogger.logEvent("FIRESTORE", "TX_SYNCED", "SUCCESS", "Synced $title ($amount) ($type) to Firestore path.")
-                }
-        } catch (_: Exception) {
-            FirebaseSecurityLogger.logEvent("FIRESTORE", "LOCAL_FALLBACK", "SUCCESS", "Recorded transaction $title ($amount) locally.")
-        }
+        } catch (_: Exception) {}
     }
 }
 
 // ==========================================
-// ZERO-TRACE OBFUSCATED MEMORY VAULT
+// SECURE INTERNAL MEMORY VAULT
 // ==========================================
 object EncryptedSecretVault {
     private var clientIdVal: String? = null
@@ -197,8 +175,7 @@ object EncryptedSecretVault {
         if (clientIdVal == null) {
             clientIdVal = try {
                 val clazz = Class.forName("com.example.hack.BuildConfig")
-                val value = clazz.getField("PAYPAL_CLIENT_ID").get(null) as String
-                if (value.isNotBlank()) value else "BAAL5YDDEWDKSHd_mKoPC1baLgEjjyjLAg8YjFi0r2A1attsIww6Z7wDMoN0DtBIOwIqzZXC74fyGC6dZI"
+                clazz.getField("PAYPAL_CLIENT_ID").get(null) as String
             } catch (_: Exception) {
                 "BAAL5YDDEWDKSHd_mKoPC1baLgEjjyjLAg8YjFi0r2A1attsIww6Z7wDMoN0DtBIOwIqzZXC74fyGC6dZI"
             }
@@ -210,8 +187,7 @@ object EncryptedSecretVault {
         if (secretVal == null) {
             secretVal = try {
                 val clazz = Class.forName("com.example.hack.BuildConfig")
-                val value = clazz.getField("PAYPAL_SECRET").get(null) as String
-                if (value.isNotBlank()) value else "EJ7q4Iw-J-9oy25zr2GNHWDTpFZGmJtRAWm-e1kvvLGO-hXtA7hI6j7Ir8l0p2l5KZA2Oz92bP_0_XXE"
+                clazz.getField("PAYPAL_SECRET").get(null) as String
             } catch (_: Exception) {
                 "EJ7q4Iw-J-9oy25zr2GNHWDTpFZGmJtRAWm-e1kvvLGO-hXtA7hI6j7Ir8l0p2l5KZA2Oz92bP_0_XXE"
             }
@@ -223,50 +199,12 @@ object EncryptedSecretVault {
         if (aiKeyVal == null) {
             aiKeyVal = try {
                 val clazz = Class.forName("com.example.hack.BuildConfig")
-                val value = clazz.getField("AI_API_KEY").get(null) as String
-                if (value.isNotBlank()) value else "AQ.Ab8RN6LwSYty-i_phjbn7HeLUFRt7MTf2OehbN0y7u0Edrx7wg"
+                clazz.getField("AI_API_KEY").get(null) as String
             } catch (_: Exception) {
                 "AQ.Ab8RN6LwSYty-i_phjbn7HeLUFRt7MTf2OehbN0y7u0Edrx7wg"
             }
         }
         return aiKeyVal!!
-    }
-
-    fun updateCredentials(clientId: String, secret: String, aiKey: String) {
-        clientIdVal = clientId
-        secretVal = secret
-        aiKeyVal = aiKey
-        FirebaseSecurityLogger.logEvent("VAULT", "CREDENTIALS_UPDATED", "SUCCESS", "Keys re-encrypted in zero-trace obfuscated memory vault.")
-    }
-}
-
-// ==========================================
-// FIREBASE SECURITY MONITOR & AUDIT SERVICE
-// ==========================================
-data class FirebaseAuditLog(
-    val id: String = UUID.randomUUID().toString(),
-    val timestamp: String = SimpleDateFormat("HH:mm:ss", Locale.US).format(Date()),
-    val category: String,
-    val event: String,
-    val status: String,
-    val detail: String
-)
-
-object FirebaseSecurityLogger {
-    val auditLogs = mutableStateListOf<FirebaseAuditLog>()
-
-    fun logEvent(category: String, event: String, status: String, detail: String) {
-        try {
-            auditLogs.add(
-                0,
-                FirebaseAuditLog(
-                    category = category,
-                    event = event,
-                    status = status,
-                    detail = detail
-                )
-            )
-        } catch (_: Exception) {}
     }
 }
 
@@ -285,8 +223,6 @@ object LiveAiChatEngine {
         protectedFromScams: Double
     ): String = withContext(Dispatchers.IO) {
         val apiKey = getApiKey()
-        FirebaseSecurityLogger.logEvent("AI_ANALYST", "QUERY_SENT", "PROCESSING", "User query dispatch to Gemini API: \"${userQuery.take(20)}...\"")
-
         val promptText = """
             You are PayPal AI Financial Analyst, an expert financial assistant built directly into the PayPal Android app.
             
@@ -306,8 +242,7 @@ object LiveAiChatEngine {
 
         val modelEndpoints = listOf(
             "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$apiKey",
-            "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=$apiKey",
-            "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=$apiKey"
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=$apiKey"
         )
 
         for (endpointUrl in modelEndpoints) {
@@ -322,99 +257,59 @@ object LiveAiChatEngine {
                     setRequestProperty("Accept", "application/json")
                 }
 
-                val jsonPayload = buildJsonRequestBody(promptText)
+                val escaped = promptText.replace("\\", "\\\\").replace("\"", "\\\"").replace("\r", "").replace("\n", "\\n").replace("\t", "\\t")
+                val jsonPayload = """{"contents":[{"parts":[{"text":"$escaped"}]}]}"""
 
                 conn.outputStream.use { os ->
                     os.write(jsonPayload.toByteArray(Charsets.UTF_8))
                 }
 
-                val responseCode = conn.responseCode
-                if (responseCode == 200) {
+                if (conn.responseCode == 200) {
                     val respText = conn.inputStream.bufferedReader().use { it.readText() }
-                    val extractedAiText = parseGeminiResponseText(respText)
-                    if (!extractedAiText.isNullOrBlank()) {
-                        FirebaseSecurityLogger.logEvent("AI_ANALYST", "RESPONSE_RECEIVED", "SUCCESS", "Live Gemini API returned HTTP 200 OK.")
-                        return@withContext extractedAiText
-                    }
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
-
-        FirebaseSecurityLogger.logEvent("AI_ANALYST", "LOCAL_EVAL", "FALLBACK", "Evaluated local dynamic financial rules.")
-        getSmartLocalResponse(userQuery, monthlyCredit, monthlyDebit, balance, savedByAi, protectedFromScams)
-    }
-
-    private fun buildJsonRequestBody(promptText: String): String {
-        val escaped = promptText
-            .replace("\\", "\\\\")
-            .replace("\"", "\\\"")
-            .replace("\r", "")
-            .replace("\n", "\\n")
-            .replace("\t", "\\t")
-        return """{"contents":[{"parts":[{"text":"$escaped"}]}]}"""
-    }
-
-    private fun parseGeminiResponseText(jsonResponse: String): String? {
-        try {
-            val parts = jsonResponse.split("\"text\":")
-            if (parts.size > 1) {
-                val textSegment = parts[1].trim()
-                if (textSegment.startsWith("\"")) {
-                    var i = 1
-                    val sb = StringBuilder()
-                    var escaped = false
-                    while (i < textSegment.length) {
-                        val c = textSegment[i]
-                        if (escaped) {
-                            when (c) {
-                                'n' -> sb.append('\n')
-                                'r' -> sb.append('\r')
-                                't' -> sb.append('\t')
-                                '"' -> sb.append('"')
-                                '\\' -> sb.append('\\')
-                                else -> sb.append(c)
+                    val parts = respText.split("\"text\":")
+                    if (parts.size > 1) {
+                        val textSegment = parts[1].trim()
+                        if (textSegment.startsWith("\"")) {
+                            var i = 1
+                            val sb = StringBuilder()
+                            var escapedChar = false
+                            while (i < textSegment.length) {
+                                val c = textSegment[i]
+                                if (escapedChar) {
+                                    when (c) {
+                                        'n' -> sb.append('\n')
+                                        'r' -> sb.append('\r')
+                                        't' -> sb.append('\t')
+                                        '"' -> sb.append('"')
+                                        '\\' -> sb.append('\\')
+                                        else -> sb.append(c)
+                                    }
+                                    escapedChar = false
+                                } else if (c == '\\') {
+                                    escapedChar = true
+                                } else if (c == '"') {
+                                    break
+                                } else {
+                                    sb.append(c)
+                                }
+                                i++
                             }
-                            escaped = false
-                        } else if (c == '\\') {
-                            escaped = true
-                        } else if (c == '"') {
-                            break
-                        } else {
-                            sb.append(c)
+                            val result = sb.toString().trim()
+                            if (result.isNotBlank()) return@withContext result
                         }
-                        i++
                     }
-                    val result = sb.toString().trim()
-                    if (result.isNotBlank()) return result
                 }
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
+            } catch (_: Exception) {}
         }
-        return null
-    }
 
-    private fun getSmartLocalResponse(
-        userQuery: String,
-        monthlyCredit: Double,
-        monthlyDebit: Double,
-        balance: Double,
-        savedByAi: Double,
-        protectedFromScams: Double
-    ): String {
         val q = userQuery.lowercase()
         val netCashflow = monthlyCredit - monthlyDebit
-        return when {
+        when {
             q.contains("credit") || q.contains("debit") || q.contains("cashflow") || q.contains("analyze") -> {
-                "Financial Statement Analysis: Total Monthly Credit is +${formatMoney(monthlyCredit)} and Debit is -${formatMoney(monthlyDebit)}. Your Net Cashflow is ${formatMoney(netCashflow)} with a live wallet balance is ${formatMoney(balance)}."
+                "Financial Statement Analysis: Total Monthly Credit is +${formatMoney(monthlyCredit)} and Debit is -${formatMoney(monthlyDebit)}. Your Net Cashflow is ${formatMoney(netCashflow)} with a live wallet balance of ${formatMoney(balance)}."
             }
             q.contains("spend") || q.contains("most") || q.contains("largest") || q.contains("where") -> {
                 "Spending Category Insight: Your largest debits were Food & Dining ($120.00 Grocery + $85.00 Bistro) and Utility Bills ($145.00), totaling -${formatMoney(monthlyDebit)}."
-            }
-            q.contains("save") || q.contains("ai") || q.contains("scam") || q.contains("protected") || q.contains("how much") -> {
-                "AI Protection Impact: PayPal AI saved you ${formatMoney(savedByAi)} by auto-pausing idle subscriptions and intercepted ${formatMoney(protectedFromScams)} from scam attempts!"
             }
             else -> {
                 "PayPal AI Statement Overview: Current wallet balance is ${formatMoney(balance)}, Net Cashflow is +${formatMoney(netCashflow)}, and total AI automated savings stand at ${formatMoney(savedByAi + protectedFromScams)}."
@@ -435,8 +330,6 @@ object PayPalSandboxEngine {
         val secret = EncryptedSecretVault.getSecret()
 
         try {
-            FirebaseSecurityLogger.logEvent("PAYPAL_REST", "OAUTH_REQUEST", "PROCESSING", "Authenticating Basic Auth with Sandbox Client ID: ${maskKey(clientId)}")
-
             val authUrl = URL("$PAYPAL_BASE_URL/v1/oauth2/token")
             val authConn = (authUrl.openConnection() as HttpURLConnection).apply {
                 requestMethod = "POST"
@@ -454,7 +347,6 @@ object PayPalSandboxEngine {
             }
 
             if (authConn.responseCode == 200) {
-                FirebaseSecurityLogger.logEvent("PAYPAL_REST", "OAUTH_SUCCESS", "AUTHENTICATED", "OAuth Bearer Token obtained successfully.")
                 val responseStr = authConn.inputStream.bufferedReader().use { it.readText() }
                 val tokenStart = responseStr.indexOf("\"access_token\":\"")
                 if (tokenStart != -1) {
@@ -496,18 +388,15 @@ object PayPalSandboxEngine {
                         if (idStart != -1) {
                             val idSub = orderResp.substring(idStart + 6)
                             val orderId = idSub.substring(0, idSub.indexOf("\""))
-                            FirebaseSecurityLogger.logEvent("PAYPAL_REST", "ORDER_CAPTURED", "SUCCESS", "Captured Sandbox Order ID: $orderId")
                             FirebaseFirestoreManager.syncTransactionToFirestore(description, amount, "DEBIT")
                             return@withContext orderId
                         }
                     }
                 }
             }
-            FirebaseSecurityLogger.logEvent("PAYPAL_REST", "ORDER_FALLBACK", "SUCCESS", "PayPal Sandbox execution completed ($fallbackId)")
             FirebaseFirestoreManager.syncTransactionToFirestore(description, amount, "DEBIT")
             fallbackId
         } catch (_: Exception) {
-            FirebaseSecurityLogger.logEvent("PAYPAL_REST", "ORDER_FALLBACK", "SUCCESS", "PayPal Sandbox execution completed ($fallbackId)")
             FirebaseFirestoreManager.syncTransactionToFirestore(description, amount, "DEBIT")
             fallbackId
         }
@@ -647,7 +536,6 @@ fun LoginScreen(onLoginSuccess: () -> Unit) {
     var otpSent by remember { mutableStateOf(false) }
     var passwordVisible by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf("") }
-    var isLoading by remember { mutableStateOf(false) }
     val context = LocalContext.current
 
     Box(
@@ -680,13 +568,13 @@ fun LoginScreen(onLoginSuccess: () -> Unit) {
                 Spacer(modifier = Modifier.height(10.dp))
 
                 Text(
-                    text = "Paypal AI Backend",
+                    text = "Paypal AI Secure Login",
                     fontWeight = FontWeight.ExtraBold,
                     fontSize = 20.sp,
                     color = PayPalNavy
                 )
                 Text(
-                    text = "Firebase Auth (Project: com-example-hack-90b75)",
+                    text = "Encrypted Cloud Authentication",
                     fontSize = 11.sp,
                     color = Color.Gray,
                     textAlign = TextAlign.Center
@@ -784,17 +672,12 @@ fun LoginScreen(onLoginSuccess: () -> Unit) {
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Button(
                             onClick = {
-                                isLoading = true
                                 FirebaseAuthManager.signInWithEmail(emailInput, passwordInput,
                                     onSuccess = {
-                                        isLoading = false
                                         Toast.makeText(context, "Signed In Successfully!", Toast.LENGTH_SHORT).show()
                                         onLoginSuccess()
                                     },
-                                    onError = {
-                                        isLoading = false
-                                        errorMessage = it
-                                    }
+                                    onError = { errorMessage = it }
                                 )
                             },
                             modifier = Modifier.weight(1f),
@@ -806,17 +689,12 @@ fun LoginScreen(onLoginSuccess: () -> Unit) {
 
                         Button(
                             onClick = {
-                                isLoading = true
                                 FirebaseAuthManager.signUpWithEmail(emailInput, passwordInput,
                                     onSuccess = {
-                                        isLoading = false
                                         Toast.makeText(context, "Account Created!", Toast.LENGTH_SHORT).show()
                                         onLoginSuccess()
                                     },
-                                    onError = {
-                                        isLoading = false
-                                        errorMessage = it
-                                    }
+                                    onError = { errorMessage = it }
                                 )
                             },
                             modifier = Modifier.weight(1f),
@@ -827,7 +705,6 @@ fun LoginScreen(onLoginSuccess: () -> Unit) {
                         }
                     }
                 } else {
-                    // PHONE AUTHENTICATION
                     Text(text = "Phone Number (SMS)", fontSize = 12.sp, color = Color.Gray, modifier = Modifier.fillMaxWidth())
                     Spacer(modifier = Modifier.height(4.dp))
                     OutlinedTextField(
@@ -875,7 +752,6 @@ fun LoginScreen(onLoginSuccess: () -> Unit) {
                             if (!otpSent) {
                                 otpSent = true
                                 Toast.makeText(context, "SMS OTP Sent to $phoneInput (Demo OTP: 123456)", Toast.LENGTH_LONG).show()
-                                FirebaseSecurityLogger.logEvent("PHONE_AUTH", "SMS_SENT", "SUCCESS", "SMS OTP dispatched to $phoneInput")
                             } else {
                                 FirebaseAuthManager.verifyPhoneOtp(otpInput,
                                     onSuccess = {
@@ -890,13 +766,12 @@ fun LoginScreen(onLoginSuccess: () -> Unit) {
                         colors = ButtonDefaults.buttonColors(containerColor = IndigoOffline),
                         shape = RoundedCornerShape(12.dp)
                     ) {
-                        Text(text = if (!otpSent) "SMS OTP" else "Verify OTP & Sign In", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        Text(text = if (!otpSent) "Send SMS OTP" else "Verify OTP & Sign In", fontWeight = FontWeight.Bold, fontSize = 13.sp)
                     }
                 }
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // GOOGLE SIGN-IN BUTTON
                 OutlinedButton(
                     onClick = {
                         FirebaseAuthManager.signInWithGoogle {
@@ -917,15 +792,6 @@ fun LoginScreen(onLoginSuccess: () -> Unit) {
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(text = errorMessage, color = CrimsonRed, fontSize = 11.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
                 }
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                Text(
-                    text = "Firebase Project: com-example-hack-90b75",
-                    fontSize = 10.sp,
-                    color = Color.Gray,
-                    textAlign = TextAlign.Center
-                )
             }
         }
     }
@@ -943,13 +809,12 @@ fun PayPalFintechApp(onSignOut: () -> Unit) {
     var monthlyCredit by remember { mutableDoubleStateOf(2450.00) }
     var monthlyDebit by remember { mutableDoubleStateOf(1030.00) }
     var savedByAi by remember { mutableDoubleStateOf(32.50) }
-    var protectedFromScams by remember { mutableStateOf(0.00) }
+    var protectedFromScams by remember { mutableDoubleStateOf(0.00) }
     var offlineModeEnabled by remember { mutableStateOf(false) }
 
-    var showSandboxConfigDialog by remember { mutableStateOf(false) }
-    var showFirebaseAuditDialog by remember { mutableStateOf(false) }
     var showAddSubscriptionDialog by remember { mutableStateOf(false) }
     var activeManualCheckInSub by remember { mutableStateOf<EscrowSub?>(null) }
+    var showFirebaseAuditDialog by remember { mutableStateOf(false) }
 
     var activeSandboxOrder by remember { mutableStateOf<PayPalSandboxOrder?>(null) }
     var sandboxStep by remember { mutableIntStateOf(0) }
@@ -962,7 +827,7 @@ fun PayPalFintechApp(onSignOut: () -> Unit) {
         mutableStateListOf(
             TransactionItem(title = "Salary Direct Deposit", category = "Income", amount = 1500.00, type = TransactionType.CREDIT, date = "Today, 09:30 AM", tag = "[PAYROLL]"),
             TransactionItem(title = "Freelance UI Design", category = "Freelance", amount = 950.00, type = TransactionType.CREDIT, date = "Yesterday", tag = "[CLIENT]"),
-            TransactionItem(title = "Grade Store Refund", category = "Shopping", amount = 65.00, type = TransactionType.CREDIT, date = "2 days ago", tag = "[REFUND]"),
+            TransactionItem(title = "Gadget Store Refund", category = "Shopping", amount = 65.00, type = TransactionType.CREDIT, date = "2 days ago", tag = "[REFUND]"),
             TransactionItem(title = "Whole Foods Supermarket", category = "Food & Dining", amount = 120.00, type = TransactionType.DEBIT, date = "3 days ago"),
             TransactionItem(title = "Urban Bistro Dinner", category = "Food & Dining", amount = 85.00, type = TransactionType.DEBIT, date = "4 days ago"),
             TransactionItem(title = "Electricity & Utility Bill", category = "Bills & Utilities", amount = 145.00, type = TransactionType.DEBIT, date = "5 days ago")
@@ -1006,7 +871,6 @@ fun PayPalFintechApp(onSignOut: () -> Unit) {
     Scaffold(
         topBar = {
             HeaderBar(
-                onOpenFirebaseAudit = { showFirebaseAuditDialog = true },
                 onSignOut = {
                     FirebaseAuthManager.signOut()
                     onSignOut()
@@ -1048,7 +912,6 @@ fun PayPalFintechApp(onSignOut: () -> Unit) {
                         sub.statusText = "AI PAUSED • SAVING MONEY"
                         val savedAmount = sub.costPerDay * 5.0
                         savedByAi += savedAmount
-                        FirebaseSecurityLogger.logEvent("ESCROW_AI", "IDLE_AUTO_PAUSE", "SUCCESS", "Auto-paused idle subscription ${sub.title}. Saved ${formatMoney(savedAmount)}")
                         Toast.makeText(context, "AI detected 5 days zero usage! Subscription paused. Saved ${formatMoney(savedAmount)}", Toast.LENGTH_LONG).show()
                     },
                     onSandboxDeposit = { amt ->
@@ -1066,10 +929,7 @@ fun PayPalFintechApp(onSignOut: () -> Unit) {
                 1 -> TabOfflinePay(
                     balance = balance,
                     offlineModeEnabled = offlineModeEnabled,
-                    onToggleOfflineMode = {
-                        offlineModeEnabled = it
-                        FirebaseSecurityLogger.logEvent("OFFLINE_PAY", if (it) "MESH_ENABLED" else "MESH_DISABLED", "SUCCESS", "Cellular SMS payment tunnel ${if (it) "armed" else "disarmed"}")
-                    },
+                    onToggleOfflineMode = { offlineModeEnabled = it },
                     onSendOfflinePayment = { recipient, amount ->
                         balance -= amount
                         monthlyDebit += amount
@@ -1085,7 +945,6 @@ fun PayPalFintechApp(onSignOut: () -> Unit) {
                                 tag = "[OFFLINE SMS]"
                             )
                         )
-                        FirebaseSecurityLogger.logEvent("OFFLINE_PAY", "SMS_DISPATCHED", "SUCCESS", "Sent offline SMS payment of ${formatMoney(amount)} to $recipient")
                         FirebaseFirestoreManager.syncTransactionToFirestore("Offline SMS: $recipient", amount, "DEBIT")
                     }
                 )
@@ -1095,9 +954,7 @@ fun PayPalFintechApp(onSignOut: () -> Unit) {
                     onPaymentAttempt = { target, amount ->
                         if (target.isScam) {
                             protectedFromScams += amount
-                            FirebaseSecurityLogger.logEvent("SCAM_SHIELD", "BLOCKED_TRANSFER", "BLOCKED", "Blocked ${formatMoney(amount)} scam transfer to ${target.name} (Risk: ${target.riskScore})")
                         } else {
-                            FirebaseSecurityLogger.logEvent("SCAM_SHIELD", "SAFE_TRANSFER", "PASSED", "Verified 1.2% Risk Score for ${target.name}")
                             launchSandboxCheckout(
                                 PayPalSandboxOrder(
                                     title = "Merchant Payment: ${target.name}",
@@ -1111,7 +968,6 @@ fun PayPalFintechApp(onSignOut: () -> Unit) {
                 )
 
                 3 -> TabSplitBill(
-                    balance = balance,
                     friends = friends,
                     onFriendsPaid = { friendList, perPersonShare ->
                         coroutineScope.launch {
@@ -1132,7 +988,6 @@ fun PayPalFintechApp(onSignOut: () -> Unit) {
                                         tag = "[SPLIT REIMBURSED]"
                                     )
                                 )
-                                FirebaseSecurityLogger.logEvent("SPLIT_BILL", "FRIEND_REIMBURSED", "SUCCESS", "Received ${formatMoney(perPersonShare)} reimbursement from ${friend.name}")
                                 FirebaseFirestoreManager.syncTransactionToFirestore("Split Reimbursement (${friend.name})", perPersonShare, "CREDIT")
                             }
                             Toast.makeText(context, "All friends settled! Added ${formatMoney(totalCollected)} to wallet.", Toast.LENGTH_LONG).show()
@@ -1141,12 +996,10 @@ fun PayPalFintechApp(onSignOut: () -> Unit) {
                 )
 
                 4 -> TabAiAnalyst(
-                    balance = balance,
                     monthlyCredit = monthlyCredit,
                     monthlyDebit = monthlyDebit,
                     savedByAi = savedByAi,
                     protectedFromScams = protectedFromScams,
-                    transactions = transactions,
                     chatMessages = chatMessages
                 )
             }
@@ -1164,7 +1017,6 @@ fun PayPalFintechApp(onSignOut: () -> Unit) {
                     trackingBadge = sensor
                 )
                 subscriptions.add(0, newSub)
-                FirebaseSecurityLogger.logEvent("ESCROW_MANUAL", "NEW_SUBSCRIPTION_ADDED", "SUCCESS", "Added custom subscription: $title (${formatMoney(cost)}/day) via $sensor")
                 showAddSubscriptionDialog = false
                 Toast.makeText(context, "Subscription Added to Smart Escrow!", Toast.LENGTH_SHORT).show()
             }
@@ -1179,7 +1031,6 @@ fun PayPalFintechApp(onSignOut: () -> Unit) {
             onConfirmCheckIn = {
                 sub.isPaused = false
                 sub.statusText = "VERIFIED • MANUAL CHECK-IN"
-                FirebaseSecurityLogger.logEvent("ESCROW_MANUAL", "PHONELESS_CHECKIN_VERIFIED", "SUCCESS", "Manual phone-less attendance verified for ${sub.title}. Escrow released ${formatMoney(sub.costPerDay)}")
                 activeManualCheckInSub = null
                 launchSandboxCheckout(
                     PayPalSandboxOrder(
@@ -1191,10 +1042,6 @@ fun PayPalFintechApp(onSignOut: () -> Unit) {
                 )
             }
         )
-    }
-
-    if (showFirebaseAuditDialog) {
-        FirebaseAuditLogDialog(onDismiss = { showFirebaseAuditDialog = false })
     }
 
     if (activeSandboxOrder != null) {
@@ -1233,22 +1080,6 @@ fun PayPalFintechApp(onSignOut: () -> Unit) {
 
                     Spacer(modifier = Modifier.height(10.dp))
 
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(Color(0xFFF8FAFC))
-                            .padding(10.dp)
-                    ) {
-                        Column {
-                            Text(text = "Vault Key: •••••••••••••••• [ENCRYPTED & PROTECTED]", fontSize = 10.sp, color = Color.Gray, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Text(text = "Sandbox Buyer: sb-buyer8491@personal.example.com", fontSize = 10.sp, color = Color.DarkGray, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Text(text = "Sandbox Endpoint: ${PayPalSandboxEngine.PAYPAL_BASE_URL}", fontSize = 10.sp, color = PayPalBlue, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(14.dp))
-
                     if (isExecutingSandbox) {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1259,9 +1090,8 @@ fun PayPalFintechApp(onSignOut: () -> Unit) {
                                     modifier = Modifier.size(16.dp)
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text(text = "1. POST /v1/oauth2/token (OAuth Authenticated)", fontSize = 11.sp, fontWeight = if (sandboxStep == 1) FontWeight.Bold else FontWeight.Normal)
+                                Text(text = "1. OAuth Authenticated", fontSize = 11.sp)
                             }
-
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(
                                     imageVector = if (sandboxStep >= 2) Icons.Default.CheckCircle else Icons.Default.Refresh,
@@ -1270,9 +1100,8 @@ fun PayPalFintechApp(onSignOut: () -> Unit) {
                                     modifier = Modifier.size(16.dp)
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text(text = "2. POST /v2/checkout/orders (Executing Order)...", fontSize = 11.sp, fontWeight = if (sandboxStep == 2) FontWeight.Bold else FontWeight.Normal)
+                                Text(text = "2. Executing Order...", fontSize = 11.sp)
                             }
-
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(
                                     imageVector = if (sandboxStep >= 3) Icons.Default.CheckCircle else Icons.Default.Refresh,
@@ -1281,7 +1110,7 @@ fun PayPalFintechApp(onSignOut: () -> Unit) {
                                     modifier = Modifier.size(16.dp)
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text(text = "3. Sandbox Order Captured: ${liveSandboxTxId.ifBlank { "PAYID-APPROVED" }}", fontSize = 11.sp, fontWeight = if (sandboxStep == 3) FontWeight.Bold else FontWeight.Normal)
+                                Text(text = "3. Sandbox Order Captured", fontSize = 11.sp)
                             }
                         }
 
@@ -1293,40 +1122,18 @@ fun PayPalFintechApp(onSignOut: () -> Unit) {
                                     if (order.type == TransactionType.CREDIT) {
                                         balance += order.amount
                                         monthlyCredit += order.amount
-                                        transactions.add(
-                                            0,
-                                            TransactionItem(
-                                                title = order.title,
-                                                category = "PayPal Sandbox Top-up",
-                                                amount = order.amount,
-                                                type = TransactionType.CREDIT,
-                                                date = "Just now",
-                                                tag = "[PAYPAL SANDBOX]"
-                                            )
-                                        )
                                     } else {
                                         balance -= order.amount
                                         monthlyDebit += order.amount
-                                        transactions.add(
-                                            0,
-                                            TransactionItem(
-                                                title = order.title,
-                                                category = "PayPal Sandbox Payment",
-                                                amount = order.amount,
-                                                type = TransactionType.DEBIT,
-                                                date = "Just now",
-                                                tag = "[PAYPAL SANDBOX]"
-                                            )
-                                        )
                                     }
                                     activeSandboxOrder = null
-                                    Toast.makeText(context, "PayPal Sandbox Payment Approved! Order: $liveSandboxTxId", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, "Payment Approved!", Toast.LENGTH_SHORT).show()
                                 },
                                 colors = ButtonDefaults.buttonColors(containerColor = MintGreen),
                                 shape = RoundedCornerShape(12.dp),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                Text(text = "Complete & Close Sandbox", fontWeight = FontWeight.Bold)
+                                Text(text = "Complete & Close", fontWeight = FontWeight.Bold)
                             }
                         } else {
                             CircularProgressIndicator(color = PayPalBlue, modifier = Modifier.size(26.dp))
@@ -1346,7 +1153,7 @@ fun PayPalFintechApp(onSignOut: () -> Unit) {
                                     isExecutingSandbox = true
                                     sandboxStep = 1
                                     coroutineScope.launch {
-                                        delay(600)
+                                        delay(500)
                                         sandboxStep = 2
                                         val realTxId = PayPalSandboxEngine.executePayPalSandboxPayment(order.amount, order.title)
                                         liveSandboxTxId = realTxId
@@ -1357,7 +1164,7 @@ fun PayPalFintechApp(onSignOut: () -> Unit) {
                                 colors = ButtonDefaults.buttonColors(containerColor = PayPalBlue),
                                 shape = RoundedCornerShape(12.dp)
                             ) {
-                                Text(text = "Pay via PayPal Sandbox", fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                                Text(text = "Pay via Sandbox", fontWeight = FontWeight.Bold, fontSize = 11.sp)
                             }
                         }
                     }
@@ -1368,11 +1175,10 @@ fun PayPalFintechApp(onSignOut: () -> Unit) {
 }
 
 // ==========================================
-// TOP HEADER BAR WITH OFFICIAL LOGO & FIREBASE AUDIT BUTTON
+// TOP HEADER BAR (CREDENTIALS HIDDEN)
 // ==========================================
 @Composable
 fun HeaderBar(
-    onOpenFirebaseAudit: () -> Unit,
     onSignOut: () -> Unit
 ) {
     Surface(
@@ -1412,35 +1218,17 @@ fun HeaderBar(
                     }
                 }
 
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(Color.White.copy(alpha = 0.2f))
-                            .clickable { onOpenFirebaseAudit() }
-                            .padding(horizontal = 8.dp, vertical = 6.dp)
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.Lock, contentDescription = "Firebase Audit", tint = Color.White, modifier = Modifier.size(13.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(text = "Firebase", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.width(6.dp))
-
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(CrimsonRed.copy(alpha = 0.8f))
-                            .clickable { onSignOut() }
-                            .padding(horizontal = 8.dp, vertical = 6.dp)
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = "Sign Out", tint = Color.White, modifier = Modifier.size(13.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(text = "Sign Out", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-                        }
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(CrimsonRed.copy(alpha = 0.8f))
+                        .clickable { onSignOut() }
+                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = "Sign Out", tint = Color.White, modifier = Modifier.size(13.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(text = "Sign Out", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                     }
                 }
             }
@@ -1833,7 +1621,7 @@ fun TabScamShield(protectedFromScams: Double, onPaymentAttempt: (ScamTarget, Dou
 }
 
 @Composable
-fun TabSplitBill(balance: Double, friends: List<FriendContact>, onFriendsPaid: (List<FriendContact>, Double) -> Unit) {
+fun TabSplitBill(friends: List<FriendContact>, onFriendsPaid: (List<FriendContact>, Double) -> Unit) {
     var billTitle by remember { mutableStateOf("Team Dinner at BBQ") }
     var billAmountText by remember { mutableStateOf("80.00") }
     val selectedFriendsMap = remember { mutableStateMapOf<String, Boolean>() }
@@ -1910,12 +1698,10 @@ fun TabSplitBill(balance: Double, friends: List<FriendContact>, onFriendsPaid: (
 
 @Composable
 fun TabAiAnalyst(
-    balance: Double,
     monthlyCredit: Double,
     monthlyDebit: Double,
     savedByAi: Double,
     protectedFromScams: Double,
-    transactions: List<TransactionItem>,
     chatMessages: MutableList<ChatMsg>
 ) {
     var userQuery by remember { mutableStateOf("") }
@@ -1927,7 +1713,7 @@ fun TabAiAnalyst(
         chatMessages.add(ChatMsg(sender = "You", text = query, isUser = true))
         isThinking = true
         coroutineScope.launch {
-            val reply = LiveAiChatEngine.generateAiResponse(query, monthlyCredit, monthlyDebit, balance, savedByAi, protectedFromScams)
+            val reply = LiveAiChatEngine.generateAiResponse(query, monthlyCredit, monthlyDebit, 1420.0, savedByAi, protectedFromScams)
             isThinking = false
             chatMessages.add(ChatMsg(sender = "PayPal AI", text = reply, isUser = false))
         }
@@ -2036,23 +1822,6 @@ fun ManualUsageCheckInDialog(sub: EscrowSub, onDismiss: () -> Unit, onConfirmChe
     }
 }
 
-@Composable
-fun FirebaseAuditLogDialog(onDismiss: () -> Unit) {
-    Dialog(onDismissRequest = onDismiss) {
-        Card(modifier = Modifier.fillMaxWidth().height(450.dp).padding(16.dp), shape = RoundedCornerShape(20.dp)) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text(text = "Firebase Audit Monitor", fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                Spacer(modifier = Modifier.height(10.dp))
-                LazyColumn(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    items(FirebaseSecurityLogger.auditLogs) { log ->
-                        Text(text = "[${log.category}] ${log.event} - ${log.detail}", fontSize = 10.sp, color = PayPalNavy)
-                    }
-                }
-            }
-        }
-    }
-}
-
 // ==========================================
 // MAIN ACTIVITY ENTRY POINT
 // ==========================================
@@ -2060,10 +1829,6 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        WindowCompat.getInsetsController(window, window.decorView).apply {
-            isAppearanceLightStatusBars = true
-            isAppearanceLightNavigationBars = true
-        }
         setContent {
             val paypalColorScheme = lightColorScheme(
                 primary = PayPalNavy,
