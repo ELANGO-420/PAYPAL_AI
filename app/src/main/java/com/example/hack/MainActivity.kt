@@ -1958,3 +1958,36 @@ fun FirebaseAuditLogDialog(onDismiss: () -> Unit) {
         }
     }
 }
+
+// ==========================================
+// MAIN ACTIVITY ENTRY POINT
+// ==========================================
+class MainActivity : ComponentActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        setContent {
+            MaterialTheme(
+                colorScheme = lightColorScheme(
+                    primary = PayPalNavy,
+                    secondary = PayPalBlue,
+                    background = SlateBg,
+                    surface = Color.White
+                )
+            ) {
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = SlateBg
+                ) {
+                    var isLoggedIn by remember { mutableStateOf(true) }
+
+                    if (!isLoggedIn) {
+                        LoginScreen(onLoginSuccess = { isLoggedIn = true })
+                    } else {
+                        PayPalFintechApp(onSignOut = { isLoggedIn = false })
+                    }
+                }
+            }
+        }
+    }
+}
