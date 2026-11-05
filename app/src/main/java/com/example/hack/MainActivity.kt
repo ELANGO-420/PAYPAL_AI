@@ -736,6 +736,20 @@ fun LoginScreen(
                     Text(text = "Continue with Google Sign-In", fontWeight = FontWeight.Bold, fontSize = 12.sp)
                 }
 
+                Spacer(modifier = Modifier.height(4.dp))
+
+                TextButton(
+                    onClick = {
+                        FirebaseAuthManager.currentUserEmail = "guest.explorer@paypal-ai.com"
+                        FirebaseAuthManager.isUserSignedIn = true
+                        Toast.makeText(context, "Entering as Guest Explorer", Toast.LENGTH_SHORT).show()
+                        onLoginSuccess()
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(text = "Do It Later (Explore App)", color = Color(0xFF93C5FD), fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                }
+
                 if (errorMessage.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(text = errorMessage, color = CrimsonRed, fontSize = 11.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
